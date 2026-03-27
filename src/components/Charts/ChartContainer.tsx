@@ -9,13 +9,50 @@ import { useMemo, lazy, Suspense } from 'react'
 import { baseConfig, baseLayout } from '../../engine/chartDefaults'
 
 const Plot = lazy(() => import('react-plotly.js'))
-import type { ChartConfig, ChartEdits } from '../../types/dataTypes'
+import type { ChartConfig } from '../../types/dataTypes'
 import './ChartContainer.css'
 
 interface ChartContainerProps {
   chart: ChartConfig
-  /** Override height (default 400) */
   height?: number
+}
+
+/**
+ * Sanitize layout for react-plotly.js.
+ *
+ * react-plotly.js v2 renders layout.title as a React child if it's an object.
+ * Plotly.js itself accepts { text: "..." } but react-plotly.js doesn't handle
+ * this correctly and throws React error #306 (object as child).
+ *
+ * Fix: flatten all title objects to plain strings.
+ */
+function sanitizeLayout(layout: Record<string, unknown>): Record<string, unknown> {
+  const clean = { ...layout }
+
+  // layout.title: { text: "..." } → "..."
+  if (clean.title && typeof clean.title === 'object' && (clean.title as any).text) {
+    clean.title = (clean.title as any).text
+  }
+
+  // layout.xaxis.title: { text: "..." } → "..."
+  if (clean.xaxis && typeof clean.xaxis === 'object') {
+    const xaxis = { ...(clean.xaxis as Record<string, unknown>) }
+    if (xaxis.title && typeof xaxis.title === 'object' && (xaxis.title as any).text) {
+      xaxis.title = (xaxis.title as any).text
+    }
+    clean.xaxis = xaxis
+  }
+
+  // layout.yaxis.title: { text: "..." } → "..."
+  if (clean.yaxis && typeof clean.yaxis === 'object') {
+    const yaxis = { ...(clean.yaxis as Record<string, unknown>) }
+    if (yaxis.title && typeof yaxis.title === 'object' && (yaxis.title as any).text) {
+      yaxis.title = (yaxis.title as any).text
+    }
+    clean.yaxis = yaxis
+  }
+
+  return clean
 }
 
 export function ChartContainer({ chart, height = 400 }: ChartContainerProps) {
@@ -30,16 +67,20 @@ export function ChartContainer({ chart, height = 400 }: ChartContainerProps) {
     // Apply user edits
     const edits = chart.edits
     if (edits.title) {
-      layout.title = { ...(layout.title as Record<string, unknown> ?? {}), text: edits.title }
+      layout.title = edits.title
     }
     if (edits.xAxisLabel) {
-      layout.xaxis = { ...(layout.xaxis as Record<string, unknown> ?? {}), title: { text: edits.xAxisLabel } }
+      const xaxis = { ...(layout.xaxis as Record<string, unknown> ?? {}) }
+      xaxis.title = edits.xAxisLabel
+      layout.xaxis = xaxis
     }
     if (edits.yAxisLabel) {
-      layout.yaxis = { ...(layout.yaxis as Record<string, unknown> ?? {}), title: { text: edits.yAxisLabel } }
+      const yaxis = { ...(layout.yaxis as Record<string, unknown> ?? {}) }
+      yaxis.title = edits.yAxisLabel
+      layout.yaxis = yaxis
     }
 
-    return layout
+    return sanitizeLayout(layout)
   }, [chart.layout, chart.edits, height])
 
   const mergedConfig = useMemo(
@@ -48,8 +89,6 @@ export function ChartContainer({ chart, height = 400 }: ChartContainerProps) {
   )
 
   const data = useMemo(() => {
-    // Chart data comes from plugins with mixed Plotly trace types.
-    // Cast through any to avoid strict Plotly.Data union mismatches.
     const traces = chart.data as unknown[]
 
     if (chart.edits.colors && chart.edits.colors.length > 0) {
