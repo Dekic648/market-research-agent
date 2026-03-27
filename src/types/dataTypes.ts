@@ -102,6 +102,53 @@ export interface PastedData {
 }
 
 // ============================================================
+// Question Blocks — user-defined question units (multi-box entry)
+// ============================================================
+
+export interface QuestionBlock {
+  id: string
+  label: string                     // user-editable, e.g. "Q3: Overall Satisfaction"
+  questionType: QuestionType
+  columns: ColumnDefinition[]
+  scaleRange?: [number, number]
+  role: 'question' | 'segment' | 'weight'
+  pastedAt: number
+}
+
+// ============================================================
+// Analysis Tasks — Layer 2 (between data entry and execution)
+// ============================================================
+
+/** Reference to a specific column within a QuestionBlock */
+export interface ColumnRef {
+  questionBlockId: string
+  columnId: string
+}
+
+/** A typed analysis task — proposed by TaskProposer, executed by runner */
+export interface AnalysisTask {
+  id: string
+  pluginId: string
+  label: string                     // "Frequency: Q2 Service Attributes"
+                                    // "Driver: Overall SAT ~ Quality + Price + Speed"
+
+  inputs: {
+    columns: ColumnRef[]            // primary data columns for this task
+    segment?: ColumnRef             // grouping variable (if task needs one)
+    outcome?: ColumnRef             // for regression/driver — separate from columns
+    weights?: ColumnRef             // for weighted analysis
+  }
+
+  sourceQuestionIds: string[]       // which QuestionBlocks contribute columns
+  dependsOn: string[]               // task IDs that must complete first
+  proposedBy: 'system' | 'user'
+  reason: string                    // "Matrix scale with 5 items → reliability analysis"
+
+  status: 'proposed' | 'confirmed' | 'skipped'
+        | 'running' | 'complete' | 'failed'
+}
+
+// ============================================================
 // Dataset Graph
 // ============================================================
 
