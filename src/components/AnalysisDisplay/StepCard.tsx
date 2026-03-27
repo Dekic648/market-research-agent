@@ -9,7 +9,8 @@ import { useState } from 'react'
 import { PlainLanguageCard } from './PlainLanguageCard'
 import { MetricsRow } from './MetricsRow'
 import { FindingCard } from './FindingCard'
-import type { PluginStepResult, FindingInput } from '../../plugins/types'
+import { ChartContainer } from '../Charts/ChartContainer'
+import type { PluginStepResult } from '../../plugins/types'
 import './AnalysisDisplay.css'
 
 interface StepCardProps {
@@ -72,16 +73,11 @@ export function StepCard({ result, pluginTitle, pluginDesc, stepNumber }: StepCa
             </div>
           )}
 
-          {/* Chart placeholder — charts will render when Plotly is added */}
+          {/* Charts */}
           {result.charts.length > 0 && (
             <div className="step-charts">
               {result.charts.map((chart) => (
-                <div key={chart.id} className="chart-placeholder">
-                  <span className="badge badge-purple">{chart.type}</span>
-                  <span className="chart-placeholder-title">
-                    {(chart.layout as any)?.title?.text ?? chart.type}
-                  </span>
-                </div>
+                <ChartContainer key={chart.id} chart={chart} />
               ))}
             </div>
           )}

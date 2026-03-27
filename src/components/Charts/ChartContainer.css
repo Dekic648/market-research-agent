@@ -1,0 +1,29 @@
+.chart-container {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.plotly-chart {
+  width: 100%;
+}
+
+/* Override Plotly's default modebar styling */
+.chart-container .modebar {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.chart-container:hover .modebar {
+  opacity: 1;
+}
+
+.chart-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: var(--text-faint);
+  font-size: 13px;
+}

@@ -182,26 +182,11 @@
 .assumption-warning { background: var(--amber-bg);    color: #633806; }
 .assumption-critical { background: var(--red-bg);     color: #791f1f; }
 
-/* Chart placeholder */
+/* Charts */
 .step-charts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-}
-
-.chart-placeholder {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 24px 16px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-elevated);
-}
-
-.chart-placeholder-title {
-  font-size: 12px;
-  color: var(--text-muted);
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* AnalysisResults */
