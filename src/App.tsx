@@ -1,4 +1,5 @@
 import { DataWorkspace } from './components/DataInput/DataWorkspace'
+import { ErrorBoundary } from './components/shared/ErrorBoundary'
 import './App.css'
 
 function App() {
@@ -9,7 +10,9 @@ function App() {
         <span className="app-subtitle">Paste survey data. Get publication-ready analysis.</span>
       </header>
       <main className="app-main">
-        <DataWorkspace />
+        <ErrorBoundary>
+          <DataWorkspace />
+        </ErrorBoundary>
       </main>
     </div>
   )

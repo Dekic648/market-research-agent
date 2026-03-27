@@ -189,74 +189,89 @@ export function DataWorkspace() {
   const addFinding = useFindingsStore((s) => s.add)
   const addChart = useChartStore((s) => s.addChart)
 
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+
   const handleRunAnalysis = useCallback(async () => {
     if (!activeNode) return
     setStep('analyzing')
+    setAnalysisError(null)
 
-    // Build resolved column data
-    const allColumns = activeNode.parsedData.groups.flatMap((g) => g.columns)
-    const resolvedColumns = allColumns.map((col) => ({
-      id: col.id,
-      name: col.name,
-      values: resolveColumn(col),
-    }))
+    try {
+      // Build resolved column data
+      const allColumns = activeNode.parsedData.groups.flatMap((g) => g.columns)
+      const resolvedColumns = allColumns.map((col) => ({
+        id: col.id,
+        name: col.name,
+        values: resolveColumn(col),
+      }))
 
-    const segCol = activeNode.parsedData.segments
-    const resolvedSegment = segCol
-      ? { id: segCol.id, name: segCol.name, values: resolveColumn(segCol) }
-      : undefined
+      const segCol = activeNode.parsedData.segments
+      const resolvedSegment = segCol
+        ? { id: segCol.id, name: segCol.name, values: resolveColumn(segCol) }
+        : undefined
 
-    const data = {
-      columns: resolvedColumns,
-      segment: resolvedSegment,
-      n: resolvedColumns[0]?.values.length ?? 0,
-    }
-
-    // Resolve capabilities → query plugins
-    const caps = CapabilityMatcher.resolve(activeNode)
-    const plugins = AnalysisRegistry.queryOrdered(caps)
-
-    const fp = allColumns[0]?.fingerprint?.hash ?? 'unknown'
-
-    const runner = new HeadlessRunner({
-      data,
-      userId: 'anonymous',
-      dataFingerprint: fp,
-      dataVersion: activeNode.dataVersion,
-      sessionId: 'current',
-    })
-
-    const result = await runner.runAll(plugins)
-
-    // Store findings
-    for (const finding of result.findings) {
-      addFinding(finding)
-    }
-
-    // Store charts in ChartStore for ReportBuilder access
-    for (const stepResult of result.stepResults) {
-      for (const chart of stepResult.charts) {
-        addChart(chart)
+      const data = {
+        columns: resolvedColumns,
+        segment: resolvedSegment,
+        n: resolvedColumns[0]?.values.length ?? 0,
       }
-    }
 
-    // Log entries
-    for (const entry of runner.logEntries) {
-      if (entry.type && entry.userId && entry.dataFingerprint !== undefined && entry.dataVersion !== undefined) {
-        logAction({
-          type: entry.type as any,
-          userId: entry.userId,
-          dataFingerprint: entry.dataFingerprint as string,
-          dataVersion: entry.dataVersion as number,
-          sessionId: entry.sessionId as string ?? 'current',
-          payload: entry.payload as Record<string, unknown>,
-        })
+      // Resolve capabilities → query plugins
+      const caps = CapabilityMatcher.resolve(activeNode)
+      const plugins = AnalysisRegistry.queryOrdered(caps)
+
+      if (plugins.length === 0) {
+        setAnalysisError('No applicable analyses found for this data configuration. Check column types and segment selection.')
+        setStep('prep')
+        return
       }
-    }
 
-    setRunResult(result)
-    setStep('results')
-  }, [activeNode, addFinding, logAction])
+      const fp = allColumns[0]?.fingerprint?.hash ?? 'unknown'
+
+      const runner = new HeadlessRunner({
+        data,
+        userId: 'anonymous',
+        dataFingerprint: fp,
+        dataVersion: activeNode.dataVersion,
+        sessionId: 'current',
+      })
+
+      const result = await runner.runAll(plugins)
+
+      // Store findings
+      for (const finding of result.findings) {
+        addFinding(finding)
+      }
+
+      // Store charts in ChartStore for ReportBuilder access
+      for (const stepResult of result.stepResults) {
+        for (const chart of stepResult.charts) {
+          addChart(chart)
+        }
+      }
+
+      // Log entries
+      for (const entry of runner.logEntries) {
+        if (entry.type && entry.userId && entry.dataFingerprint !== undefined && entry.dataVersion !== undefined) {
+          logAction({
+            type: entry.type as any,
+            userId: entry.userId,
+            dataFingerprint: entry.dataFingerprint as string,
+            dataVersion: entry.dataVersion as number,
+            sessionId: (entry.sessionId as string) ?? 'current',
+            payload: entry.payload as Record<string, unknown>,
+          })
+        }
+      }
+
+      setRunResult(result)
+      setStep('results')
+    } catch (err) {
+      console.error('Analysis failed:', err)
+      setAnalysisError(err instanceof Error ? err.message : 'Analysis failed unexpectedly.')
+      setStep('prep')
+    }
+  }, [activeNode, addFinding, addChart, logAction])
 
   const handleStartOver = useCallback(() => {
     setParsedData(null)
@@ -293,11 +308,18 @@ export function DataWorkspace() {
       )}
 
       {step === 'prep' && activeNode && (
-        <PrepWorkspace
-          node={activeNode}
-          detectionFlags={detectionFlags}
-          onReadyToAnalyze={handleRunAnalysis}
-        />
+        <>
+          {analysisError && (
+            <div className="analysis-error card">
+              <strong>Analysis Error:</strong> {analysisError}
+            </div>
+          )}
+          <PrepWorkspace
+            node={activeNode}
+            detectionFlags={detectionFlags}
+            onReadyToAnalyze={handleRunAnalysis}
+          />
+        </>
       )}
 
       {step === 'analyzing' && (

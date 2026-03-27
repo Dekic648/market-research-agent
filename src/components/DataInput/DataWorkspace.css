@@ -100,6 +100,15 @@
   to { transform: rotate(360deg); }
 }
 
+/* Analysis error */
+.analysis-error {
+  padding: 14px 20px;
+  background: var(--red-bg);
+  border-color: var(--red);
+  color: #791f1f;
+  font-size: 13px;
+}
+
 /* Results footer */
 .results-footer {
   display: flex;
