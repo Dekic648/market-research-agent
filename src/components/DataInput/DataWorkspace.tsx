@@ -1,37 +1,33 @@
 /**
- * DataWorkspace — orchestrates the paste → parse → tag → store flow.
+ * DataWorkspace — orchestrates the full analysis pipeline.
  *
- * Pipeline:
- *   1. PasteGrid captures raw text, parses via ParserRegistry
- *   2. DetectionLayer runs statistical checks on parsed columns
- *   3. ColumnTagger shows columns with detection flags, user confirms types
- *   4. On confirm: builds DatasetNode, pushes to DatasetGraph store
+ * New flow (Layer 2 architecture):
+ *   1. Question blocks — user pastes each question in its own box
+ *   2. Task review — system proposes tasks, user confirms/skips (judgment surface)
+ *   3. Analyzing — runner executes confirmed tasks
+ *   4. Results — step cards with charts and findings
+ *   5. Report — schema editor + export
  */
 
 import { useState, useCallback } from 'react'
 import './DataWorkspace.css'
-import { PasteGrid } from './PasteGrid'
-import { ColumnTagger, type ColumnTag } from './ColumnTagger'
-import { PrepWorkspace } from '../DataPreparation/PrepWorkspace'
+import { QuestionBlockEntry } from './QuestionBlockEntry'
+import { TaskReview } from './TaskReview'
 import { AnalysisResults } from '../AnalysisDisplay/AnalysisResults'
 import { ReportBuilder } from '../Report/ReportBuilder'
-import type { PastedData } from '../../parsers/adapters/PasteGridAdapter'
-import type { DetectionFlag } from '../../detection/types'
-import { runDetectionStatisticalOnly } from '../../detection/detectionLayer'
+import type { QuestionBlock, AnalysisTask, DatasetNode, DataGroup } from '../../types/dataTypes'
 import { useDatasetGraphStore } from '../../stores/datasetGraph'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useAnalysisLog } from '../../stores/analysisLog'
 import { useFindingsStore } from '../../stores/findingsStore'
 import { useChartStore } from '../../stores/chartStore'
-import type { ColumnDefinition, DatasetNode, DataGroup } from '../../types/dataTypes'
-import { computeFingerprint } from '../../parsers/fingerprint'
 import { resolveColumn } from '../../engine/resolveColumn'
-import { CapabilityMatcher } from '../../engine/CapabilityMatcher'
 import { AnalysisRegistry } from '../../plugins/AnalysisRegistry'
 import { HeadlessRunner } from '../../runners/HeadlessRunner'
+import { proposeTasks } from '../../engine/TaskProposer'
 import type { RunResult } from '../../runners/IStepRunner'
 
-// Import plugins to register them
+// Register all plugins
 import '../../plugins/FrequencyPlugin'
 import '../../plugins/CrosstabPlugin'
 import '../../plugins/SignificancePlugin'
@@ -44,289 +40,248 @@ import '../../plugins/CorrelationPlugin'
 import '../../plugins/PointBiserialPlugin'
 import '../../plugins/SegmentProfilePlugin'
 
-type Step = 'paste' | 'tag' | 'prep' | 'analyzing' | 'results' | 'report'
+type Step = 'blocks' | 'review' | 'analyzing' | 'results' | 'report'
 
 export function DataWorkspace() {
-  const [step, setStep] = useState<Step>('paste')
-  const [parsedData, setParsedData] = useState<PastedData | null>(null)
-  const [detectionFlags, setDetectionFlags] = useState<DetectionFlag[]>([])
+  const [step, setStep] = useState<Step>('blocks')
+  const [questionBlocks, setQuestionBlocks] = useState<QuestionBlock[]>([])
+  const [proposedTasks, setProposedTasks] = useState<AnalysisTask[]>([])
+  const [runResult, setRunResult] = useState<RunResult | null>(null)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
   const addNode = useDatasetGraphStore((s) => s.addNode)
   const setActiveDatasetNode = useSessionStore((s) => s.setActiveDatasetNode)
   const logAction = useAnalysisLog((s) => s.log)
-  const activeNodeId = useSessionStore((s) => s.activeDatasetNodeId)
-  const nodes = useDatasetGraphStore((s) => s.nodes)
-  const activeNode = nodes.find((n) => n.id === activeNodeId)
-
-  const handleDataParsed = useCallback((data: PastedData) => {
-    if (!data) {
-      setParsedData(null)
-      setDetectionFlags([])
-      setStep('paste')
-      return
-    }
-
-    setParsedData(data)
-
-    // Build temporary ColumnDefinitions for detection
-    const tempColumns: ColumnDefinition[] = data.columns.map((col) => ({
-      id: col.id,
-      name: col.name,
-      type: 'rating',
-      nRows: col.values.length,
-      nMissing: col.values.filter((v) => v === null).length,
-      rawValues: col.values,
-      fingerprint: col.fingerprint,
-      semanticDetectionCache: null,
-      transformStack: [],
-      sensitivity: 'anonymous',
-      declaredScaleRange: null,
-    }))
-
-    // Run statistical detection
-    const result = runDetectionStatisticalOnly({ columns: tempColumns })
-    setDetectionFlags(result.flags)
-
-    setStep('tag')
-  }, [])
-
-  const handleTagsConfirmed = useCallback(
-    (tags: ColumnTag[]) => {
-      if (!parsedData) return
-
-      // Build ColumnDefinitions from confirmed tags
-      const segmentTag = tags.find((t) => t.isSegment)
-      let segmentCol: ColumnDefinition | undefined
-
-      const dataColumns: ColumnDefinition[] = []
-
-      for (const col of parsedData.columns) {
-        const tag = tags.find((t) => t.columnId === col.id)
-        if (!tag) continue
-
-        const colDef: ColumnDefinition = {
-          id: col.id,
-          name: col.name,
-          type: tag.type,
-          nRows: col.values.length,
-          nMissing: col.values.filter((v) => v === null).length,
-          rawValues: col.values,
-          fingerprint: col.fingerprint ?? computeFingerprint(col.values, col.id),
-          semanticDetectionCache: null,
-          transformStack: [],
-          sensitivity: 'anonymous',
-          declaredScaleRange:
-            tag.scaleMin !== null && tag.scaleMax !== null
-              ? [tag.scaleMin, tag.scaleMax]
-              : null,
-        }
-
-        if (tag.isSegment) {
-          segmentCol = { ...colDef, type: 'category' }
-        } else {
-          dataColumns.push(colDef)
-        }
-      }
-
-      // Group columns by type
-      const groups: DataGroup[] = []
-      const byType = new Map<string, ColumnDefinition[]>()
-      for (const col of dataColumns) {
-        const key = col.type
-        if (!byType.has(key)) byType.set(key, [])
-        byType.get(key)!.push(col)
-      }
-      for (const [type, cols] of byType) {
-        groups.push({
-          questionType: type as ColumnDefinition['type'],
-          columns: cols,
-          label: `${type} items`,
-        })
-      }
-
-      // Build and store DatasetNode
-      const nodeId = 'node_' + Date.now()
-      const node: DatasetNode = {
-        id: nodeId,
-        label: 'Dataset',
-        parsedData: {
-          groups,
-          segments: segmentCol,
-        },
-        weights: null,
-        readonly: false,
-        source: 'user',
-        dataVersion: 1,
-        createdAt: Date.now(),
-      }
-
-      addNode(node)
-      setActiveDatasetNode(nodeId)
-
-      // Log the parse completion
-      const fp = dataColumns[0]?.fingerprint?.hash ?? 'unknown'
-      logAction({
-        type: 'parse_completed',
-        userId: 'anonymous',
-        dataFingerprint: fp,
-        dataVersion: 1,
-        sessionId: 'current',
-        payload: {
-          nColumns: dataColumns.length,
-          nRows: parsedData.nRows,
-          hasSegment: !!segmentCol,
-          format: parsedData.format,
-        },
-      })
-
-      setStep('prep')
-    },
-    [parsedData, addNode, setActiveDatasetNode, logAction]
-  )
-
-  // ---- Analysis execution ----
-  const [runResult, setRunResult] = useState<RunResult | null>(null)
   const addFinding = useFindingsStore((s) => s.add)
   const addChart = useChartStore((s) => s.addChart)
 
-  const [analysisError, setAnalysisError] = useState<string | null>(null)
+  // ---- Step 1 → Step 2: blocks confirmed → propose tasks ----
+  const handleBlocksConfirmed = useCallback((blocks: QuestionBlock[]) => {
+    setQuestionBlocks(blocks)
 
-  const handleRunAnalysis = useCallback(async () => {
-    if (!activeNode) return
+    // Store dataset node for the store system
+    const questions = blocks.filter((b) => b.role === 'question')
+    const segBlock = blocks.find((b) => b.role === 'segment')
+
+    const groups: DataGroup[] = questions.map((block) => ({
+      questionType: block.questionType,
+      columns: block.columns,
+      label: block.label || `${block.questionType} items`,
+      scaleRange: block.scaleRange,
+    }))
+
+    const nodeId = 'node_' + Date.now()
+    const node: DatasetNode = {
+      id: nodeId,
+      label: 'Dataset',
+      parsedData: {
+        groups,
+        segments: segBlock?.columns[0],
+      },
+      weights: null,
+      readonly: false,
+      source: 'user',
+      dataVersion: 1,
+      createdAt: Date.now(),
+    }
+
+    addNode(node)
+    setActiveDatasetNode(nodeId)
+
+    const fp = questions[0]?.columns[0]?.fingerprint?.hash ?? 'unknown'
+    logAction({
+      type: 'parse_completed',
+      userId: 'anonymous',
+      dataFingerprint: fp,
+      dataVersion: 1,
+      sessionId: 'current',
+      payload: {
+        nQuestions: questions.length,
+        hasSegment: !!segBlock,
+        questionTypes: questions.map((b) => b.questionType),
+      },
+    })
+
+    // Propose tasks
+    const tasks = proposeTasks(blocks)
+    setProposedTasks(tasks)
+    setStep('review')
+  }, [addNode, setActiveDatasetNode, logAction])
+
+  // ---- Step 2 → Step 3: tasks confirmed → execute ----
+  const handleTasksConfirmed = useCallback(async (tasks: AnalysisTask[]) => {
+    const confirmed = tasks.filter((t) => t.status === 'proposed')
+    if (confirmed.length === 0) {
+      setAnalysisError('No tasks selected. Go back and include at least one analysis.')
+      return
+    }
+
     setStep('analyzing')
     setAnalysisError(null)
 
     try {
-      console.log('[MRA] Starting analysis...')
-      // Build resolved column data
-      const allColumns = activeNode.parsedData.groups.flatMap((g) => g.columns)
-      console.log('[MRA] Columns:', allColumns.length)
-      const resolvedColumns = allColumns.map((col) => ({
-        id: col.id,
-        name: col.name,
-        values: resolveColumn(col),
-      }))
+      const allStepResults: RunResult['stepResults'] = []
+      const allFindings: RunResult['findings'] = []
+      const completedPlugins: string[] = []
+      const skippedPlugins: string[] = []
+      const startTime = performance.now()
 
-      const segCol = activeNode.parsedData.segments
-      const resolvedSegment = segCol
-        ? { id: segCol.id, name: segCol.name, values: resolveColumn(segCol) }
-        : undefined
+      // Build a lookup from questionBlockId → block
+      const blockMap = new Map(questionBlocks.map((b) => [b.id, b]))
 
-      const data = {
-        columns: resolvedColumns,
-        segment: resolvedSegment,
-        n: resolvedColumns[0]?.values.length ?? 0,
-      }
+      // Execute tasks in order (respecting dependsOn)
+      const executed = new Set<string>()
 
-      // Resolve capabilities → query plugins
-      const caps = CapabilityMatcher.resolve(activeNode)
-      const plugins = AnalysisRegistry.queryOrdered(caps)
+      // Simple dependency-respecting execution: keep iterating until all done
+      const pending = [...confirmed]
+      let safetyCounter = 0
 
-      console.log('[MRA] Capabilities:', Array.from(caps))
-      console.log('[MRA] Plugins:', plugins.map(p => p.id))
+      while (pending.length > 0 && safetyCounter < 100) {
+        safetyCounter++
+        const nextIdx = pending.findIndex((t) =>
+          t.dependsOn.every((dep) => executed.has(dep) || !confirmed.some((c) => c.id === dep))
+        )
+        if (nextIdx === -1) break // circular dependency or unresolvable
 
-      if (plugins.length === 0) {
-        setAnalysisError('No applicable analyses found for this data configuration. Check column types and segment selection.')
-        setStep('prep')
-        return
-      }
+        const task = pending.splice(nextIdx, 1)[0]
+        const plugin = AnalysisRegistry.get(task.pluginId)
 
-      const fp = allColumns[0]?.fingerprint?.hash ?? 'unknown'
-
-      const runner = new HeadlessRunner({
-        data,
-        userId: 'anonymous',
-        dataFingerprint: fp,
-        dataVersion: activeNode.dataVersion,
-        sessionId: 'current',
-      })
-
-      console.log('[MRA] Running HeadlessRunner...')
-      const result = await runner.runAll(plugins)
-      console.log('[MRA] Run complete:', result.completedPlugins, 'skipped:', result.skippedPlugins)
-
-      // Store findings
-      for (const finding of result.findings) {
-        addFinding(finding)
-      }
-
-      // Store charts in ChartStore for ReportBuilder access
-      for (const stepResult of result.stepResults) {
-        for (const chart of stepResult.charts) {
-          addChart(chart)
+        if (!plugin) {
+          skippedPlugins.push(task.pluginId)
+          executed.add(task.id)
+          continue
         }
-      }
 
-      // Log entries
-      for (const entry of runner.logEntries) {
-        if (entry.type && entry.userId && entry.dataFingerprint !== undefined && entry.dataVersion !== undefined) {
-          logAction({
-            type: entry.type as any,
-            userId: entry.userId,
-            dataFingerprint: entry.dataFingerprint as string,
-            dataVersion: entry.dataVersion as number,
-            sessionId: (entry.sessionId as string) ?? 'current',
-            payload: entry.payload as Record<string, unknown>,
+        // Resolve task inputs to ResolvedColumnData
+        const resolvedColumns = task.inputs.columns
+          .map((ref) => {
+            const block = blockMap.get(ref.questionBlockId)
+            const col = block?.columns.find((c) => c.id === ref.columnId)
+            if (!col) return null
+            return { id: col.id, name: col.name, values: resolveColumn(col) }
           })
+          .filter((c): c is NonNullable<typeof c> => c !== null)
+
+        // Resolve outcome (prepend to columns for regression/driver)
+        if (task.inputs.outcome) {
+          const block = blockMap.get(task.inputs.outcome.questionBlockId)
+          const col = block?.columns.find((c) => c.id === task.inputs.outcome!.columnId)
+          if (col) {
+            resolvedColumns.unshift({ id: col.id, name: col.name, values: resolveColumn(col) })
+          }
         }
+
+        // Resolve segment
+        let resolvedSegment = undefined
+        if (task.inputs.segment) {
+          const block = blockMap.get(task.inputs.segment.questionBlockId)
+          const col = block?.columns.find((c) => c.id === task.inputs.segment!.columnId)
+          if (col) {
+            resolvedSegment = { id: col.id, name: col.name, values: resolveColumn(col) }
+          }
+        }
+
+        const data = {
+          columns: resolvedColumns,
+          segment: resolvedSegment,
+          n: resolvedColumns[0]?.values.length ?? 0,
+        }
+
+        const fp = resolvedColumns[0]?.id ?? 'unknown'
+
+        const runner = new HeadlessRunner({
+          data,
+          userId: 'anonymous',
+          dataFingerprint: fp,
+          dataVersion: 1,
+          sessionId: 'current',
+        })
+
+        try {
+          const result = await runner.runOne(plugin)
+          allStepResults.push(result)
+          completedPlugins.push(task.pluginId)
+
+          for (const fi of result.findings) {
+            const finding = {
+              id: `finding_${task.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              stepId: task.pluginId,
+              ...fi,
+              adjustedPValue: null,
+              suppressed: false,
+              priority: allFindings.length,
+              createdAt: Date.now(),
+              dataVersion: 1,
+              dataFingerprint: fp,
+            }
+            allFindings.push(finding)
+            addFinding(finding)
+          }
+
+          for (const chart of result.charts) {
+            addChart(chart)
+          }
+        } catch (err) {
+          skippedPlugins.push(task.pluginId)
+          console.error(`Task ${task.id} failed:`, err)
+        }
+
+        executed.add(task.id)
       }
 
-      console.log('[MRA] Setting results, stepResults:', result.stepResults.length)
-      setRunResult(result)
+      const runResult: RunResult = {
+        stepResults: allStepResults,
+        findings: allFindings,
+        violations: [],
+        completedPlugins,
+        skippedPlugins,
+        durationMs: performance.now() - startTime,
+      }
+
+      setRunResult(runResult)
       setStep('results')
-      console.log('[MRA] Step set to results')
     } catch (err) {
       console.error('Analysis failed:', err)
       setAnalysisError(err instanceof Error ? err.message : 'Analysis failed unexpectedly.')
-      setStep('prep')
+      setStep('review')
     }
-  }, [activeNode, addFinding, addChart, logAction])
+  }, [questionBlocks, addFinding, addChart])
 
+  // ---- Navigation ----
   const handleStartOver = useCallback(() => {
-    setParsedData(null)
-    setDetectionFlags([])
+    setQuestionBlocks([])
+    setProposedTasks([])
     setRunResult(null)
-    setStep('paste')
+    setAnalysisError(null)
+    setStep('blocks')
   }, [])
 
   return (
     <div className="data-workspace">
       {/* Step indicator */}
       <div className="step-indicator">
-        <StepDot active={step === 'paste'} done={step !== 'paste'} label="1. Paste" />
-        <StepDot active={step === 'tag'} done={['prep','analyzing','results','report'].includes(step)} label="2. Tag" />
-        <StepDot active={step === 'prep'} done={['analyzing','results','report'].includes(step)} label="3. Prepare" />
-        <StepDot active={step === 'analyzing' || step === 'results'} done={step === 'report'} label="4. Analyze" />
-        <StepDot active={step === 'report'} done={false} label="5. Report" />
+        <StepDot active={step === 'blocks'} done={step !== 'blocks'} label="1. Questions" />
+        <StepDot active={step === 'review'} done={['analyzing', 'results', 'report'].includes(step)} label="2. Review Plan" />
+        <StepDot active={step === 'analyzing' || step === 'results'} done={step === 'report'} label="3. Results" />
+        <StepDot active={step === 'report'} done={false} label="4. Report" />
       </div>
 
-      {/* Current step content */}
-      {step === 'paste' && (
-        <PasteGrid onDataParsed={handleDataParsed} parsedData={parsedData} />
+      {/* Step content */}
+      {step === 'blocks' && (
+        <QuestionBlockEntry onBlocksConfirmed={handleBlocksConfirmed} />
       )}
 
-      {step === 'tag' && parsedData && (
-        <>
-          <PasteGrid onDataParsed={handleDataParsed} parsedData={parsedData} />
-          <ColumnTagger
-            parsedData={parsedData}
-            detectionFlags={detectionFlags}
-            onTagsConfirmed={handleTagsConfirmed}
-          />
-        </>
-      )}
-
-      {step === 'prep' && activeNode && (
+      {step === 'review' && (
         <>
           {analysisError && (
             <div className="analysis-error card">
-              <strong>Analysis Error:</strong> {analysisError}
+              <strong>Error:</strong> {analysisError}
             </div>
           )}
-          <PrepWorkspace
-            node={activeNode}
-            detectionFlags={detectionFlags}
-            onReadyToAnalyze={handleRunAnalysis}
+          <TaskReview
+            tasks={proposedTasks}
+            blocks={questionBlocks}
+            onConfirmed={handleTasksConfirmed}
           />
         </>
       )}
@@ -336,7 +291,7 @@ export function DataWorkspace() {
           <div className="analyzing-content">
             <div className="analyzing-spinner" />
             <h2>Running Analysis...</h2>
-            <p>Processing all applicable plugins</p>
+            <p>Executing confirmed tasks</p>
           </div>
         </div>
       )}
@@ -347,6 +302,9 @@ export function DataWorkspace() {
           <div className="results-footer">
             <button className="btn btn-primary" onClick={() => setStep('report')}>
               Build Report →
+            </button>
+            <button className="btn btn-secondary" onClick={() => setStep('review')}>
+              ← Back to Plan
             </button>
             <button className="btn btn-secondary" onClick={handleStartOver}>
               New Analysis

@@ -1,0 +1,39 @@
+.qb-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.qb-entry-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.qb-entry-header p {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.qb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qb-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.qb-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+}
+
+.qb-footer-stats {
+  display: flex;
+  gap: 8px;
+}
