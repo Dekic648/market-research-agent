@@ -197,8 +197,10 @@ export function DataWorkspace() {
     setAnalysisError(null)
 
     try {
+      console.log('[MRA] Starting analysis...')
       // Build resolved column data
       const allColumns = activeNode.parsedData.groups.flatMap((g) => g.columns)
+      console.log('[MRA] Columns:', allColumns.length)
       const resolvedColumns = allColumns.map((col) => ({
         id: col.id,
         name: col.name,
@@ -220,6 +222,9 @@ export function DataWorkspace() {
       const caps = CapabilityMatcher.resolve(activeNode)
       const plugins = AnalysisRegistry.queryOrdered(caps)
 
+      console.log('[MRA] Capabilities:', Array.from(caps))
+      console.log('[MRA] Plugins:', plugins.map(p => p.id))
+
       if (plugins.length === 0) {
         setAnalysisError('No applicable analyses found for this data configuration. Check column types and segment selection.')
         setStep('prep')
@@ -236,7 +241,9 @@ export function DataWorkspace() {
         sessionId: 'current',
       })
 
+      console.log('[MRA] Running HeadlessRunner...')
       const result = await runner.runAll(plugins)
+      console.log('[MRA] Run complete:', result.completedPlugins, 'skipped:', result.skippedPlugins)
 
       // Store findings
       for (const finding of result.findings) {
@@ -264,8 +271,10 @@ export function DataWorkspace() {
         }
       }
 
+      console.log('[MRA] Setting results, stepResults:', result.stepResults.length)
       setRunResult(result)
       setStep('results')
+      console.log('[MRA] Step set to results')
     } catch (err) {
       console.error('Analysis failed:', err)
       setAnalysisError(err instanceof Error ? err.message : 'Analysis failed unexpectedly.')
