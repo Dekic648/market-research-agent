@@ -14,6 +14,7 @@ import { PasteGrid } from './PasteGrid'
 import { ColumnTagger, type ColumnTag } from './ColumnTagger'
 import { PrepWorkspace } from '../DataPreparation/PrepWorkspace'
 import { AnalysisResults } from '../AnalysisDisplay/AnalysisResults'
+import { ReportBuilder } from '../Report/ReportBuilder'
 import type { PastedData } from '../../parsers/adapters/PasteGridAdapter'
 import type { DetectionFlag } from '../../detection/types'
 import { runDetectionStatisticalOnly } from '../../detection/detectionLayer'
@@ -21,6 +22,7 @@ import { useDatasetGraphStore } from '../../stores/datasetGraph'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useAnalysisLog } from '../../stores/analysisLog'
 import { useFindingsStore } from '../../stores/findingsStore'
+import { useChartStore } from '../../stores/chartStore'
 import type { ColumnDefinition, DatasetNode, DataGroup } from '../../types/dataTypes'
 import { computeFingerprint } from '../../parsers/fingerprint'
 import { resolveColumn } from '../../engine/resolveColumn'
@@ -42,7 +44,7 @@ import '../../plugins/CorrelationPlugin'
 import '../../plugins/PointBiserialPlugin'
 import '../../plugins/SegmentProfilePlugin'
 
-type Step = 'paste' | 'tag' | 'prep' | 'analyzing' | 'results'
+type Step = 'paste' | 'tag' | 'prep' | 'analyzing' | 'results' | 'report'
 
 export function DataWorkspace() {
   const [step, setStep] = useState<Step>('paste')
@@ -185,6 +187,7 @@ export function DataWorkspace() {
   // ---- Analysis execution ----
   const [runResult, setRunResult] = useState<RunResult | null>(null)
   const addFinding = useFindingsStore((s) => s.add)
+  const addChart = useChartStore((s) => s.addChart)
 
   const handleRunAnalysis = useCallback(async () => {
     if (!activeNode) return
@@ -230,6 +233,13 @@ export function DataWorkspace() {
       addFinding(finding)
     }
 
+    // Store charts in ChartStore for ReportBuilder access
+    for (const stepResult of result.stepResults) {
+      for (const chart of stepResult.charts) {
+        addChart(chart)
+      }
+    }
+
     // Log entries
     for (const entry of runner.logEntries) {
       if (entry.type && entry.userId && entry.dataFingerprint !== undefined && entry.dataVersion !== undefined) {
@@ -260,9 +270,10 @@ export function DataWorkspace() {
       {/* Step indicator */}
       <div className="step-indicator">
         <StepDot active={step === 'paste'} done={step !== 'paste'} label="1. Paste" />
-        <StepDot active={step === 'tag'} done={step === 'prep' || step === 'analyzing' || step === 'results'} label="2. Tag" />
-        <StepDot active={step === 'prep'} done={step === 'analyzing' || step === 'results'} label="3. Prepare" />
-        <StepDot active={step === 'analyzing' || step === 'results'} done={step === 'results'} label="4. Analyze" />
+        <StepDot active={step === 'tag'} done={['prep','analyzing','results','report'].includes(step)} label="2. Tag" />
+        <StepDot active={step === 'prep'} done={['analyzing','results','report'].includes(step)} label="3. Prepare" />
+        <StepDot active={step === 'analyzing' || step === 'results'} done={step === 'report'} label="4. Analyze" />
+        <StepDot active={step === 'report'} done={false} label="5. Report" />
       </div>
 
       {/* Current step content */}
@@ -303,6 +314,23 @@ export function DataWorkspace() {
         <>
           <AnalysisResults runResult={runResult} />
           <div className="results-footer">
+            <button className="btn btn-primary" onClick={() => setStep('report')}>
+              Build Report →
+            </button>
+            <button className="btn btn-secondary" onClick={handleStartOver}>
+              New Analysis
+            </button>
+          </div>
+        </>
+      )}
+
+      {step === 'report' && (
+        <>
+          <ReportBuilder />
+          <div className="results-footer">
+            <button className="btn btn-secondary" onClick={() => setStep('results')}>
+              ← Back to Results
+            </button>
             <button className="btn btn-secondary" onClick={handleStartOver}>
               New Analysis
             </button>
