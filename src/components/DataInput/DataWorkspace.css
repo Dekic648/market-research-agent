@@ -105,7 +105,7 @@
   padding: 14px 20px;
   background: var(--red-bg);
   border-color: var(--red);
-  color: #791f1f;
+  color: var(--red-text);
   font-size: 13px;
 }
 

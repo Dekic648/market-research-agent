@@ -17,12 +17,7 @@
 .plain-language-card p {
   font-size: 13px;
   line-height: 1.6;
-  color: #085041;
-}
-
-@media (prefers-color-scheme: dark) {
-  .plain-language-card { background: #04342c; }
-  .plain-language-card p { color: #9fe1cb; }
+  color: var(--teal-text);
 }
 
 /* MetricsRow */
@@ -179,8 +174,8 @@
 }
 
 .assumption-info    { background: var(--bg-elevated); color: var(--text-muted); }
-.assumption-warning { background: var(--amber-bg);    color: #633806; }
-.assumption-critical { background: var(--red-bg);     color: #791f1f; }
+.assumption-warning { background: var(--amber-bg);    color: var(--amber-text); }
+.assumption-critical { background: var(--red-bg);     color: var(--red-text); }
 
 /* Charts */
 .step-charts {

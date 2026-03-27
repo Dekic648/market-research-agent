@@ -128,8 +128,8 @@
 }
 
 .flag-info     { background: var(--bg-elevated); color: var(--text-muted); }
-.flag-warning  { background: var(--amber-bg);    color: #633806; }
-.flag-critical { background: var(--red-bg);      color: #791f1f; }
+.flag-warning  { background: var(--amber-bg);    color: var(--amber-text); }
+.flag-critical { background: var(--red-bg);      color: var(--red-text); }
 
 .tagger-footer {
   display: flex;

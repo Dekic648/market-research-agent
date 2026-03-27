@@ -6,6 +6,9 @@
 }
 
 .app-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: 32px;
 }
 
@@ -18,6 +21,11 @@
 .app-subtitle {
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.theme-toggle {
+  flex-shrink: 0;
+  font-size: 13px;
 }
 
 .app-main {

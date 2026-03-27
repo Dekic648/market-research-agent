@@ -6,9 +6,19 @@
  * React children, causing error #306).
  */
 
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect, useMemo, useState } from 'react'
 import { baseConfig, baseLayout } from '../../engine/chartDefaults'
 import type { ChartConfig } from '../../types/dataTypes'
+
+/** Read current theme colors from CSS custom properties */
+function getThemeColors() {
+  const style = getComputedStyle(document.documentElement)
+  return {
+    text: style.getPropertyValue('--chart-text').trim() || '#1a1a18',
+    bg: style.getPropertyValue('--chart-bg').trim() || '#ffffff',
+    grid: style.getPropertyValue('--chart-grid').trim() || '#e8e6df',
+  }
+}
 import './ChartContainer.css'
 
 interface ChartContainerProps {
@@ -28,25 +38,49 @@ function getPlotly() {
 export function ChartContainer({ chart, height = 400 }: ChartContainerProps) {
   const divRef = useRef<HTMLDivElement>(null)
 
+  // Watch for theme changes
+  const [themeKey, setThemeKey] = useState(0)
+  useEffect(() => {
+    const observer = new MutationObserver(() => setThemeKey((k) => k + 1))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
   const mergedLayout = useMemo(() => {
+    const theme = getThemeColors()
+
     const layout: Record<string, unknown> = {
       ...baseLayout,
       ...chart.layout,
       autosize: true,
       height,
+      paper_bgcolor: theme.bg,
+      plot_bgcolor: theme.bg,
+      font: { family: 'Inter, system-ui, sans-serif', size: 12, color: theme.text },
     }
+
+    // Set grid colors on axes
+    const xaxis = { ...(layout.xaxis as Record<string, unknown> ?? {}) }
+    const yaxis = { ...(layout.yaxis as Record<string, unknown> ?? {}) }
+    xaxis.gridcolor = theme.grid
+    xaxis.zerolinecolor = theme.grid
+    yaxis.gridcolor = theme.grid
+    yaxis.zerolinecolor = theme.grid
+    layout.xaxis = xaxis
+    layout.yaxis = yaxis
 
     // Apply user edits
     if (chart.edits.title) layout.title = chart.edits.title
     if (chart.edits.xAxisLabel) {
-      layout.xaxis = { ...(layout.xaxis as object ?? {}), title: chart.edits.xAxisLabel }
+      (layout.xaxis as Record<string, unknown>).title = chart.edits.xAxisLabel
     }
     if (chart.edits.yAxisLabel) {
-      layout.yaxis = { ...(layout.yaxis as object ?? {}), title: chart.edits.yAxisLabel }
+      (layout.yaxis as Record<string, unknown>).title = chart.edits.yAxisLabel
     }
 
     return layout
-  }, [chart.layout, chart.edits, height])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chart.layout, chart.edits, height, themeKey])
 
   const mergedConfig = useMemo(
     () => ({ ...baseConfig, ...chart.config, responsive: true }),

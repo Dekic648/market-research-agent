@@ -46,7 +46,7 @@
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--red-bg);
-  color: #791f1f;
+  color: var(--red-text);
 }
 
 .prep-panel-body {
@@ -127,8 +127,8 @@
   line-height: 1.5;
 }
 
-.mcar-ok { background: var(--teal-bg); color: #085041; }
-.mcar-warning { background: var(--amber-bg); color: #633806; }
+.mcar-ok { background: var(--teal-bg); color: var(--teal-text); }
+.mcar-warning { background: var(--amber-bg); color: var(--amber-text); }
 
 /* Strategy selection */
 .strategy-select {
@@ -168,7 +168,7 @@
   color: var(--text-muted);
 }
 
-.strategy-btn.selected .strategy-desc { color: #085041; }
+.strategy-btn.selected .strategy-desc { color: var(--teal-text); }
 
 /* Recode panel */
 .recode-item {
