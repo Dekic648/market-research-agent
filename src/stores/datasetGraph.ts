@@ -29,6 +29,8 @@ interface DatasetGraphState {
   addTransform: (nodeId: string, columnId: string, transform: Transform) => void
   removeTransform: (nodeId: string, columnId: string, transformId: string) => void
   toggleTransform: (nodeId: string, columnId: string, transformId: string) => void
+  reorderTransforms: (nodeId: string, columnId: string, orderedIds: string[]) => void
+  snapshotStack: (nodeId: string, columnId: string) => Transform[]
 
   // Bulk reset
   reset: () => void
@@ -56,7 +58,7 @@ function updateColumnInNode(
   }
 }
 
-export const useDatasetGraphStore = create<DatasetGraphState>()((set) => ({
+export const useDatasetGraphStore = create<DatasetGraphState>()((set, get) => ({
   ...initialState,
 
   addNode: (node) =>
@@ -127,6 +129,32 @@ export const useDatasetGraphStore = create<DatasetGraphState>()((set) => ({
           : n
       ),
     })),
+
+  reorderTransforms: (nodeId, columnId, orderedIds) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === nodeId
+          ? updateColumnInNode(n, columnId, (col) => {
+              const byId = new Map(col.transformStack.map((t) => [t.id, t]))
+              const reordered = orderedIds
+                .map((id) => byId.get(id))
+                .filter((t): t is Transform => t !== undefined)
+              return { ...col, transformStack: reordered }
+            })
+          : n
+      ),
+    })),
+
+  snapshotStack: (nodeId, columnId) => {
+    const state = get()
+    const node = state.nodes.find((n) => n.id === nodeId)
+    if (!node) return []
+    for (const group of node.parsedData.groups) {
+      const col = group.columns.find((c) => c.id === columnId)
+      if (col) return col.transformStack.map((t) => ({ ...t }))
+    }
+    return []
+  },
 
   reset: () => set(initialState),
 }))
