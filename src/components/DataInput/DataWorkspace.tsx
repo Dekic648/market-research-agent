@@ -12,16 +12,37 @@ import { useState, useCallback } from 'react'
 import './DataWorkspace.css'
 import { PasteGrid } from './PasteGrid'
 import { ColumnTagger, type ColumnTag } from './ColumnTagger'
+import { PrepWorkspace } from '../DataPreparation/PrepWorkspace'
+import { AnalysisResults } from '../AnalysisDisplay/AnalysisResults'
 import type { PastedData } from '../../parsers/adapters/PasteGridAdapter'
 import type { DetectionFlag } from '../../detection/types'
 import { runDetectionStatisticalOnly } from '../../detection/detectionLayer'
 import { useDatasetGraphStore } from '../../stores/datasetGraph'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useAnalysisLog } from '../../stores/analysisLog'
+import { useFindingsStore } from '../../stores/findingsStore'
 import type { ColumnDefinition, DatasetNode, DataGroup } from '../../types/dataTypes'
 import { computeFingerprint } from '../../parsers/fingerprint'
+import { resolveColumn } from '../../engine/resolveColumn'
+import { CapabilityMatcher } from '../../engine/CapabilityMatcher'
+import { AnalysisRegistry } from '../../plugins/AnalysisRegistry'
+import { HeadlessRunner } from '../../runners/HeadlessRunner'
+import type { RunResult } from '../../runners/IStepRunner'
 
-type Step = 'paste' | 'tag' | 'ready'
+// Import plugins to register them
+import '../../plugins/FrequencyPlugin'
+import '../../plugins/CrosstabPlugin'
+import '../../plugins/SignificancePlugin'
+import '../../plugins/PostHocPlugin'
+import '../../plugins/ReliabilityPlugin'
+import '../../plugins/FactorPlugin'
+import '../../plugins/RegressionPlugin'
+import '../../plugins/DriverPlugin'
+import '../../plugins/CorrelationPlugin'
+import '../../plugins/PointBiserialPlugin'
+import '../../plugins/SegmentProfilePlugin'
+
+type Step = 'paste' | 'tag' | 'prep' | 'analyzing' | 'results'
 
 export function DataWorkspace() {
   const [step, setStep] = useState<Step>('paste')
@@ -156,18 +177,92 @@ export function DataWorkspace() {
         },
       })
 
-      setStep('ready')
+      setStep('prep')
     },
     [parsedData, addNode, setActiveDatasetNode, logAction]
   )
+
+  // ---- Analysis execution ----
+  const [runResult, setRunResult] = useState<RunResult | null>(null)
+  const addFinding = useFindingsStore((s) => s.add)
+
+  const handleRunAnalysis = useCallback(async () => {
+    if (!activeNode) return
+    setStep('analyzing')
+
+    // Build resolved column data
+    const allColumns = activeNode.parsedData.groups.flatMap((g) => g.columns)
+    const resolvedColumns = allColumns.map((col) => ({
+      id: col.id,
+      name: col.name,
+      values: resolveColumn(col),
+    }))
+
+    const segCol = activeNode.parsedData.segments
+    const resolvedSegment = segCol
+      ? { id: segCol.id, name: segCol.name, values: resolveColumn(segCol) }
+      : undefined
+
+    const data = {
+      columns: resolvedColumns,
+      segment: resolvedSegment,
+      n: resolvedColumns[0]?.values.length ?? 0,
+    }
+
+    // Resolve capabilities → query plugins
+    const caps = CapabilityMatcher.resolve(activeNode)
+    const plugins = AnalysisRegistry.queryOrdered(caps)
+
+    const fp = allColumns[0]?.fingerprint?.hash ?? 'unknown'
+
+    const runner = new HeadlessRunner({
+      data,
+      userId: 'anonymous',
+      dataFingerprint: fp,
+      dataVersion: activeNode.dataVersion,
+      sessionId: 'current',
+    })
+
+    const result = await runner.runAll(plugins)
+
+    // Store findings
+    for (const finding of result.findings) {
+      addFinding(finding)
+    }
+
+    // Log entries
+    for (const entry of runner.logEntries) {
+      if (entry.type && entry.userId && entry.dataFingerprint !== undefined && entry.dataVersion !== undefined) {
+        logAction({
+          type: entry.type as any,
+          userId: entry.userId,
+          dataFingerprint: entry.dataFingerprint as string,
+          dataVersion: entry.dataVersion as number,
+          sessionId: entry.sessionId as string ?? 'current',
+          payload: entry.payload as Record<string, unknown>,
+        })
+      }
+    }
+
+    setRunResult(result)
+    setStep('results')
+  }, [activeNode, addFinding, logAction])
+
+  const handleStartOver = useCallback(() => {
+    setParsedData(null)
+    setDetectionFlags([])
+    setRunResult(null)
+    setStep('paste')
+  }, [])
 
   return (
     <div className="data-workspace">
       {/* Step indicator */}
       <div className="step-indicator">
-        <StepDot active={step === 'paste'} done={step !== 'paste'} label="1. Paste Data" />
-        <StepDot active={step === 'tag'} done={step === 'ready'} label="2. Tag Columns" />
-        <StepDot active={step === 'ready'} done={false} label="3. Analyze" />
+        <StepDot active={step === 'paste'} done={step !== 'paste'} label="1. Paste" />
+        <StepDot active={step === 'tag'} done={step === 'prep' || step === 'analyzing' || step === 'results'} label="2. Tag" />
+        <StepDot active={step === 'prep'} done={step === 'analyzing' || step === 'results'} label="3. Prepare" />
+        <StepDot active={step === 'analyzing' || step === 'results'} done={step === 'results'} label="4. Analyze" />
       </div>
 
       {/* Current step content */}
@@ -186,29 +281,33 @@ export function DataWorkspace() {
         </>
       )}
 
-      {step === 'ready' && activeNode && (
-        <div className="ready-state card">
-          <div className="ready-content">
-            <h2>Data Ready</h2>
-            <p>
-              {activeNode.parsedData.groups.reduce((s, g) => s + g.columns.length, 0)} columns tagged
-              {activeNode.parsedData.segments ? ` · Segment: ${activeNode.parsedData.segments.name}` : ''}
-              {' · '}{activeNode.parsedData.groups[0]?.columns[0]?.nRows ?? 0} rows
-            </p>
-            <div className="ready-actions">
-              <button className="btn btn-primary" disabled>
-                Continue to Data Preparation →
-              </button>
-              <button className="btn btn-secondary" onClick={() => {
-                setParsedData(null)
-                setDetectionFlags([])
-                setStep('paste')
-              }}>
-                Start Over
-              </button>
-            </div>
+      {step === 'prep' && activeNode && (
+        <PrepWorkspace
+          node={activeNode}
+          detectionFlags={detectionFlags}
+          onReadyToAnalyze={handleRunAnalysis}
+        />
+      )}
+
+      {step === 'analyzing' && (
+        <div className="analyzing-state card">
+          <div className="analyzing-content">
+            <div className="analyzing-spinner" />
+            <h2>Running Analysis...</h2>
+            <p>Processing all applicable plugins</p>
           </div>
         </div>
+      )}
+
+      {step === 'results' && runResult && (
+        <>
+          <AnalysisResults runResult={runResult} />
+          <div className="results-footer">
+            <button className="btn btn-secondary" onClick={handleStartOver}>
+              New Analysis
+            </button>
+          </div>
+        </>
       )}
     </div>
   )

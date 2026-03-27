@@ -1,0 +1,242 @@
+.prep-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prep-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 800px) {
+  .prep-panels { grid-template-columns: 1fr; }
+}
+
+/* Shared panel styles */
+.prep-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.prep-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-elevated);
+}
+
+.prep-panel-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.required-tag {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--red-bg);
+  color: #791f1f;
+}
+
+.prep-panel-body {
+  padding: 12px 16px;
+}
+
+.no-missing {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 12px 0;
+  text-align: center;
+}
+
+/* Missing data bars */
+.missing-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.missing-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.missing-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.missing-bar-label {
+  width: 100px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.missing-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.missing-bar-fill {
+  height: 100%;
+  background: var(--amber);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.missing-bar-fill.high {
+  background: var(--red);
+}
+
+.missing-bar-pct {
+  width: 45px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+/* MCAR result */
+.mcar-result {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mcar-ok { background: var(--teal-bg); color: #085041; }
+.mcar-warning { background: var(--amber-bg); color: #633806; }
+
+/* Strategy selection */
+.strategy-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-light);
+}
+
+.strategy-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.strategy-btn:hover { background: var(--bg-elevated); }
+
+.strategy-btn.selected {
+  border-color: var(--teal);
+  background: var(--teal-bg);
+}
+
+.strategy-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.strategy-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.strategy-btn.selected .strategy-desc { color: #085041; }
+
+/* Recode panel */
+.recode-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.recode-item:last-child { border-bottom: none; }
+
+.recode-info { flex: 1; }
+
+.recode-column {
+  font-weight: 500;
+  font-size: 13px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.recode-message {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.recode-sources {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.recode-confidence {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.recode-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.recode-confirmed {
+  font-size: 12px;
+  color: var(--teal);
+  padding: 8px 0;
+  font-weight: 500;
+}
+
+/* Prep log strip */
+.prep-log {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+}
+
+.prep-log-items {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
