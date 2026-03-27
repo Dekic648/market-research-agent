@@ -1,0 +1,179 @@
+/**
+ * HeadlessRunner — batch execution without UI interaction.
+ *
+ * UX DECISION: Option A — HeadlessRunner is a power-user shortcut.
+ * Interactive mode remains the primary flow. HeadlessRunner is the
+ * "Run All" button for analysts who want results without stepping through.
+ *
+ * KEY RULE: Assumption violations are NEVER silent.
+ * - Every violation is written to AnalysisLog
+ * - Every finding from a violated plugin is flagged
+ * - Progress reported via onProgress callback
+ * - Errors on individual plugins do NOT stop the pipeline
+ */
+
+import type { AnalysisPlugin, PluginStepResult, ResolvedColumnData } from '../plugins/types'
+import type { Finding, AnalysisLogEntry } from '../types/dataTypes'
+import type {
+  IStepRunner, RunResult, RunProgress, AssumptionViolation,
+} from './IStepRunner'
+
+interface HeadlessRunnerConfig {
+  data: ResolvedColumnData
+  weights?: number[]
+  userId: string
+  dataFingerprint: string
+  dataVersion: number
+  sessionId: string
+}
+
+export class HeadlessRunner implements IStepRunner {
+  private config: HeadlessRunnerConfig
+
+  /** Accumulated log entries — caller writes these to AnalysisLog store */
+  readonly logEntries: Partial<AnalysisLogEntry>[] = []
+
+  onProgress?: (progress: RunProgress) => void
+  onViolation?: (violation: AssumptionViolation) => void
+
+  constructor(config: HeadlessRunnerConfig) {
+    this.config = config
+  }
+
+  async runOne(plugin: AnalysisPlugin): Promise<PluginStepResult> {
+    // Check preconditions
+    const violations: AssumptionViolation[] = []
+    for (const validator of plugin.preconditions) {
+      const check = validator.validate(this.config.data)
+      if (!check.passed) {
+        const violation: AssumptionViolation = {
+          pluginId: plugin.id,
+          pluginTitle: plugin.title,
+          check,
+        }
+        violations.push(violation)
+        this.onViolation?.(violation)
+
+        // Log every violation — NEVER silent
+        this.logEntries.push({
+          type: 'assumption_violation',
+          userId: this.config.userId,
+          dataFingerprint: this.config.dataFingerprint,
+          dataVersion: this.config.dataVersion,
+          sessionId: this.config.sessionId,
+          payload: {
+            pluginId: plugin.id,
+            assumption: check.name,
+            message: check.message,
+            severity: check.severity,
+          },
+        })
+      }
+    }
+
+    const result = await plugin.run(this.config.data, this.config.weights)
+
+    // Complete log entry
+    result.logEntry = {
+      ...result.logEntry,
+      userId: this.config.userId,
+      dataFingerprint: this.config.dataFingerprint,
+      dataVersion: this.config.dataVersion,
+      sessionId: this.config.sessionId,
+    }
+
+    // Flag findings if preconditions were violated
+    if (violations.length > 0) {
+      for (const fi of result.findings) {
+        fi.detail = `[ASSUMPTION VIOLATION: ${violations.map((v) => v.check.message).join('; ')}] ${fi.detail}`
+      }
+    }
+
+    result.assumptions = [
+      ...result.assumptions,
+      ...violations.map((v) => v.check),
+    ]
+
+    this.logEntries.push(result.logEntry)
+
+    return result
+  }
+
+  /**
+   * Run all plugins without stopping. Errors on individual plugins
+   * are caught and the plugin is skipped — the pipeline continues.
+   */
+  async runAll(plugins: AnalysisPlugin[]): Promise<RunResult> {
+    const startTime = performance.now()
+    const stepResults: PluginStepResult[] = []
+    const allFindings: Finding[] = []
+    const allViolations: AssumptionViolation[] = []
+    const completedPlugins: string[] = []
+    const skippedPlugins: string[] = []
+
+    for (let i = 0; i < plugins.length; i++) {
+      const plugin = plugins[i]
+
+      this.onProgress?.({
+        current: i + 1,
+        total: plugins.length,
+        pluginId: plugin.id,
+        pluginTitle: plugin.title,
+      })
+
+      try {
+        const result = await this.runOne(plugin)
+        stepResults.push(result)
+        completedPlugins.push(plugin.id)
+
+        for (const fi of result.findings) {
+          allFindings.push({
+            id: `finding_${plugin.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            stepId: plugin.id,
+            ...fi,
+            adjustedPValue: null,
+            suppressed: false,
+            priority: allFindings.length,
+            createdAt: Date.now(),
+            dataVersion: this.config.dataVersion,
+            dataFingerprint: this.config.dataFingerprint,
+          })
+        }
+
+        for (const check of result.assumptions) {
+          if (!check.passed) {
+            allViolations.push({
+              pluginId: plugin.id,
+              pluginTitle: plugin.title,
+              check,
+            })
+          }
+        }
+      } catch (err) {
+        skippedPlugins.push(plugin.id)
+
+        // Log the failure — never silent
+        this.logEntries.push({
+          type: 'analysis_failed',
+          userId: this.config.userId,
+          dataFingerprint: this.config.dataFingerprint,
+          dataVersion: this.config.dataVersion,
+          sessionId: this.config.sessionId,
+          payload: {
+            pluginId: plugin.id,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        })
+      }
+    }
+
+    return {
+      stepResults,
+      findings: allFindings,
+      violations: allViolations,
+      completedPlugins,
+      skippedPlugins,
+      durationMs: performance.now() - startTime,
+    }
+  }
+}
