@@ -1,0 +1,147 @@
+.column-tagger {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tagger-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.tagger-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.tagger-header p {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tagger-grid {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.tagger-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-light);
+  transition: background 0.1s;
+}
+
+.tagger-row:hover {
+  background: var(--bg-elevated);
+}
+
+.tagger-row.is-segment {
+  background: var(--teal-bg);
+}
+
+.tagger-col-info {
+  flex: 1;
+  min-width: 180px;
+}
+
+.col-name {
+  display: block;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.col-stats {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.tagger-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.type-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 12px;
+  min-width: 140px;
+}
+
+.scale-range {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scale-input {
+  width: 50px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 12px;
+  text-align: center;
+}
+
+.scale-dash {
+  color: var(--text-faint);
+}
+
+.segment-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.segment-toggle input {
+  accent-color: var(--teal);
+}
+
+.tagger-flags {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.flag-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flag-info     { background: var(--bg-elevated); color: var(--text-muted); }
+.flag-warning  { background: var(--amber-bg);    color: #633806; }
+.flag-critical { background: var(--red-bg);      color: #791f1f; }
+
+.tagger-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-elevated);
+}
+
+.tagger-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

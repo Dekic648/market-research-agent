@@ -1,0 +1,129 @@
+.paste-grid {
+  padding: 0;
+  overflow: hidden;
+}
+
+.paste-prompt {
+  padding: 24px;
+}
+
+.paste-area {
+  width: 100%;
+  min-height: 180px;
+  padding: 16px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.paste-area:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+
+.paste-area::placeholder {
+  color: var(--text-faint);
+  font-family: var(--font);
+}
+
+.parse-btn {
+  margin-top: 12px;
+}
+
+/* Toolbar */
+.grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-elevated);
+}
+
+.grid-stats {
+  display: flex;
+  gap: 8px;
+}
+
+/* Scrollable grid */
+.grid-scroll {
+  overflow: auto;
+  max-height: 500px;
+}
+
+.data-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+
+.data-grid th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated);
+  border-bottom: 2px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.data-grid td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.data-grid tbody tr:hover {
+  background: var(--bg-elevated);
+}
+
+.row-num {
+  width: 40px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.cell-null {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    var(--border-light) 3px,
+    var(--border-light) 4px
+  );
+}
+
+.cell-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-str {
+  color: var(--text);
+}
+
+.grid-truncated {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-faint);
+  border-top: 1px solid var(--border-light);
+}

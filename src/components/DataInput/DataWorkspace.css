@@ -1,0 +1,71 @@
+.data-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Step indicator */
+.step-indicator {
+  display: flex;
+  gap: 32px;
+  padding: 0 4px;
+}
+
+.step-dot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-faint);
+  transition: color 0.2s;
+}
+
+.step-dot.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.step-dot.done {
+  color: var(--teal);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all 0.2s;
+}
+
+.step-dot.active .dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.2);
+}
+
+.step-dot.done .dot {
+  background: var(--teal);
+}
+
+/* Ready state */
+.ready-state {
+  padding: 32px;
+  text-align: center;
+}
+
+.ready-content h2 {
+  font-size: 18px;
+  margin-bottom: 6px;
+  color: var(--teal);
+}
+
+.ready-content p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.ready-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
