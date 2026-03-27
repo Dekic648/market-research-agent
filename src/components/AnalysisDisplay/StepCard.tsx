@@ -50,7 +50,7 @@ export function StepCard({ result, pluginTitle, pluginDesc, stepNumber }: StepCa
                 .filter((a) => !a.passed)
                 .map((a, i) => (
                   <div key={i} className={`assumption-warn assumption-${a.severity}`}>
-                    ⚠ {a.message}
+                    &#9888; {String(a.message ?? '')}
                   </div>
                 ))}
             </div>
@@ -91,27 +91,34 @@ function buildMetrics(result: PluginStepResult) {
   const data = result.data as Record<string, unknown>
   const metrics: Array<{ label: string; value: string | number; highlight?: boolean }> = []
 
-  // Plugin-specific metric extraction
-  if (data.frequencies) {
-    const freqs = data.frequencies as any[]
-    if (freqs.length > 0) {
-      metrics.push({ label: 'Items', value: freqs.length })
-      if (freqs[0].mean !== null) metrics.push({ label: 'Mean', value: freqs[0].mean })
-      if (freqs[0].netScore !== undefined) metrics.push({ label: 'Net Score', value: `${freqs[0].netScore > 0 ? '+' : ''}${freqs[0].netScore.toFixed(1)}pp`, highlight: freqs[0].netScore > 0 })
+  try {
+    if (data.frequencies) {
+      const freqs = data.frequencies as any[]
+      if (freqs.length > 0) {
+        metrics.push({ label: 'Items', value: freqs.length })
+        if (typeof freqs[0].mean === 'number' && !isNaN(freqs[0].mean)) {
+          metrics.push({ label: 'Mean', value: freqs[0].mean })
+        }
+        if (typeof freqs[0].netScore === 'number' && !isNaN(freqs[0].netScore)) {
+          metrics.push({ label: 'Net Score', value: `${freqs[0].netScore > 0 ? '+' : ''}${freqs[0].netScore.toFixed(1)}pp`, highlight: freqs[0].netScore > 0 })
+        }
+      }
     }
-  }
 
-  if (data.results && Array.isArray(data.results)) {
-    const results = data.results as any[]
-    const sigCount = results.filter((r) => r.p !== undefined && r.p < 0.05).length
-    if (sigCount > 0) metrics.push({ label: 'Significant', value: `${sigCount}/${results.length}`, highlight: true })
-  }
+    if (data.results && Array.isArray(data.results)) {
+      const results = data.results as any[]
+      const sigCount = results.filter((r) => typeof r.p === 'number' && r.p < 0.05).length
+      if (sigCount > 0) metrics.push({ label: 'Significant', value: `${sigCount}/${results.length}`, highlight: true })
+    }
 
-  if (data.result) {
-    const r = data.result as any
-    if (r.alpha !== undefined) metrics.push({ label: 'Alpha', value: r.alpha, highlight: r.alpha >= 0.7 })
-    if (r.R2 !== undefined) metrics.push({ label: 'R²', value: r.R2, highlight: r.R2 > 0.3 })
-    if (r.nFactors !== undefined) metrics.push({ label: 'Factors', value: r.nFactors })
+    if (data.result) {
+      const r = data.result as any
+      if (typeof r.alpha === 'number') metrics.push({ label: 'Alpha', value: r.alpha, highlight: r.alpha >= 0.7 })
+      if (typeof r.R2 === 'number') metrics.push({ label: 'R²', value: r.R2, highlight: r.R2 > 0.3 })
+      if (typeof r.nFactors === 'number') metrics.push({ label: 'Factors', value: r.nFactors })
+    }
+  } catch {
+    // If metric extraction fails, return empty — never crash the render
   }
 
   return metrics

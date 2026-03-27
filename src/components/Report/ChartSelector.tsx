@@ -36,7 +36,7 @@ export function ChartSelector({ onIncludeChart, includedIds }: ChartSelectorProp
           >
             <span className="badge badge-purple">{chart.type}</span>
             <span className="chart-thumb-title">
-              {chart.edits.title ?? (chart.layout as any)?.title?.text ?? chart.type}
+              {String(chart.edits.title ?? (chart.layout as any)?.title?.text ?? chart.type ?? '')}
             </span>
             <span className="chart-thumb-step">{chart.stepId}</span>
           </div>

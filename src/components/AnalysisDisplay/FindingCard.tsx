@@ -23,15 +23,17 @@ export function FindingCard({
         <span className={`finding-badge ${significant ? 'badge-teal' : 'badge-amber'}`}>
           {significant ? 'Significant' : 'Not significant'}
         </span>
-        {pValue !== null && (
+        {pValue !== null && typeof pValue === 'number' && (
           <span className="finding-p">
             p {pValue < 0.001 ? '< .001' : `= ${pValue.toFixed(3)}`}
           </span>
         )}
-        {effectLabel && <span className="finding-effect">{effectLabel} effect</span>}
+        {effectLabel && typeof effectLabel === 'string' && (
+          <span className="finding-effect">{effectLabel} effect</span>
+        )}
       </div>
-      <h4 className="finding-title">{title}</h4>
-      <p className="finding-summary">{summary}</p>
+      <h4 className="finding-title">{String(title ?? '')}</h4>
+      <p className="finding-summary">{String(summary ?? '')}</p>
       {onSuppress && (
         <button className="finding-suppress" onClick={onSuppress}>Hide from report</button>
       )}
