@@ -19,10 +19,14 @@
 // Types
 // ---------------------------------------------------------------------------
 
+import type { ColumnFingerprint } from '../../types/dataTypes'
+import { computeFingerprint } from '../fingerprint'
+
 export interface ParsedColumn {
   id: string
   name: string
   values: (number | string | null)[]
+  fingerprint: ColumnFingerprint
 }
 
 export interface PastedData {
@@ -215,10 +219,12 @@ export const PasteGridAdapter = {
         values.push(coerceCell(cellRaw))
       }
 
+      const colId = `col_${c}`
       columns.push({
-        id: `col_${c}`,
+        id: colId,
         name,
         values,
+        fingerprint: computeFingerprint(values, colId),
       })
     }
 
