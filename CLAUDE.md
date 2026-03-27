@@ -1,10 +1,8 @@
-# CLAUDE.md — v3
-## Market Research Stats Toolkit — Analysis Plugin Phase
+# CLAUDE.md — v4
+## Market Research Stats Toolkit — Preparation Layer + Report Phase
 
-> **Swap this in when:** Phases 1–3 are confirmed complete.
-> Phase 1 done: all 5 stores typed, serialization test passes, `@ts-nocheck` removed from stats-engine.ts, `weights?` added to aggregation functions.
-> Phase 2 done: `ColumnFingerprint` implemented, all fingerprint tests pass.
-> Phase 3 done: `TransformationStack` types exist, `resolveColumn()` implemented, all transform tests pass, zero direct `rawValues` access in analysis calls.
+> **Swap this in when:** All 11 plugins are implemented and producing correct results, both runners work, Phases 4–6 (DetectionLayer) are complete.
+> Confirm: `FrequencyPlugin` through `SegmentProfilePlugin` all pass their own test suites. `InteractiveRunner` and `HeadlessRunner` both produce `StepResult` correctly.
 
 ---
 
@@ -13,299 +11,270 @@
 ```
 v2/src/
 ├── engine/
-│   ├── stats-engine.ts         — fully typed, no @ts-nocheck, weights? added
-│   ├── stats-engine.worker.ts
-│   ├── workerClient.ts
-│   ├── resolveColumn.ts        — pure function, single chokepoint
-│   ├── types.ts                — typed interfaces for all 59 functions
+│   ├── stats-engine.ts         — fully typed, weights? on all aggregation functions
+│   ├── resolveColumn.ts        — in use by all plugins
+│   ├── chartDefaults.ts        — baseConfig, darkLayout
 ├── parsers/
 │   ├── ParserRegistry.ts
-│   ├── fingerprint.ts          — ColumnFingerprint, diffFingerprints, matchColumns
-│   ├── adapters/
-│       ├── PasteGridAdapter.ts
-├── types/
-│   ├── dataTypes.ts            — complete
-│   ├── transforms.ts           — full Transform union type
-├── stores/
-│   ├── datasetGraph.ts         — with addTransform, toggleTransform, snapshotStack
-│   ├── sessionStore.ts
-│   ├── chartStore.ts
-│   ├── findingsStore.ts
-│   ├── analysisLog.ts
-│   ├── selectors.ts
+│   ├── fingerprint.ts          — ColumnFingerprint complete
+│   ├── adapters/PasteGridAdapter.ts
+├── detection/
+│   ├── types.ts
+│   ├── statisticalChecks.ts    — all 6 checks implemented
+│   ├── semanticChecks.ts       — Claude API, cached per column
+│   ├── detectionLayer.ts       — orchestrator, flags logged
+├── plugins/
+│   ├── AnalysisRegistry.ts
+│   ├── FrequencyPlugin.ts      — and all 10 others
+│   ├── [11 plugins total]
+├── runners/
+│   ├── IStepRunner.ts
+│   ├── InteractiveRunner.ts
+│   ├── HeadlessRunner.ts
+├── engine/
+│   ├── CapabilityMatcher.ts
+├── stores/ [all 5 complete]
 ```
 
-All 7 non-negotiable rules from v1/v2 still apply in full.
+All 7 non-negotiable rules still apply in full.
 
 ---
 
-## Current priority — build analysis plugins
+## Current priority — three parallel tracks
 
-The infrastructure is done. The next layer is the `AnalysisPlugin` system — replacing the hardcoded `determineFlows()` and `STEP_REGISTRY` from v1.
+1. **Data Preparation Layer** — the UI between paste and analysis
+2. **Report generation** — ReportSchema + ReportRenderer
+3. **Session persistence** — IndexedDB + .mrst file
+
+Build in this order. Preparation first — it gates analysis correctness. Report second — it completes the researcher workflow. Persistence third — it's the last infrastructure piece before Supabase consideration.
 
 ---
 
-## AnalysisPlugin contract — full specification
+## Track 1 — Data Preparation Layer
 
-Every analysis is an `AnalysisPlugin`. Self-describing, self-testing, self-registering.
+This is the mandatory step between column tagging and analysis. Three panels, one mandatory action.
+
+### Component structure
+
+```
+src/components/DataPreparation/
+├── PrepWorkspace.tsx         — three-panel layout, pipeline position indicator
+├── MissingDataPanel.tsx      — MANDATORY — user cannot skip this
+├── RecodePanel.tsx           — pre-populated from DetectionFlags
+├── ComputePanel.tsx          — formula editor
+├── PrepLog.tsx               — always-visible strip at bottom
+```
+
+### MissingDataPanel — the one mandatory step
 
 ```typescript
-// src/plugins/types.ts
-interface AnalysisPlugin {
-  id: string
-  title: string
-  desc: string
+// User must declare strategy before "Run Analysis" button activates
+type MissingDataStrategy = 'listwise' | 'pairwise' | 'mean_imputation'
 
-  requires: DataCapability[]
-  // DataCapability values: 'continuous' | 'categorical' | 'ordinal' | 'binary'
-  // | 'segment' | 'repeated' | 'n>30' | 'n>100' | 'text' | 'temporal'
-  // | 'multiple_response' | 'weighted'
-
-  preconditions: Validator[]
-  // Checked BEFORE run. Violations surface on button with reason.
-  // In HeadlessRunner: violations written to AnalysisLog, finding flagged — never silent.
-
-  run(data: ResolvedColumnData, weights?: number[]): Promise<StepResult>
-  // data = resolveColumn() output — never rawValues
-
-  produces: OutputContract
-  // Typed shape of StepResult.data — used by ChartContainer and DataTable
-
-  plainLanguage(result: StepResult): string
-  // Interpretation lives HERE — never in a shared file, never in a component
-
-  tests: TestCase[]
-  // CI refuses to merge a plugin without passing tests
-}
-```
-
-### AnalysisRegistry
-
-```typescript
-// src/plugins/AnalysisRegistry.ts
-const AnalysisRegistry = {
-  register(plugin: AnalysisPlugin): void,
-  query(capabilities: CapabilitySet): AnalysisPlugin[],
-  // Returns runnable plugins for given capabilities — ordered by priority
-  // Knows no plugin by name — pure capability matching
-}
-```
-
-**Rule:** if you are adding a condition to `CapabilityMatcher.ts` that mentions a plugin by name, stop. Write a plugin instead.
-
----
-
-## CapabilityMatcher — replaces determineFlows()
-
-```typescript
-// src/engine/CapabilityMatcher.ts
-const CapabilityMatcher = {
-  resolve(source: DatasetGraph | DataSelection): CapabilitySet
-  // Reads data types, column counts, n, segment presence
-  // Returns flat capability list — never evaluates plugin names
-  // AnalysisRegistry.query(capabilities) does the matching
-}
-```
-
-`CapabilityMatcher` knows no plugin by name. `AnalysisRegistry` knows all plugins. Neither knows about each other's internals.
-
----
-
-## Plugin build order
-
-Build in this exact order — each one tests a new part of the infrastructure.
-
-### Batch 1 — descriptive and comparison (build first)
-
-```
-FrequencyPlugin      id: 'frequency'
-  requires: ['categorical' | 'ordinal']
-  produces: FrequencyResult — { values, counts, pcts, top2box, bot2box, netScore }
-  charts: ['divergingStackedBar', 'horizontalBar']
-  plainLanguage: "X% rated [item] positively (Top 2 Box)"
-
-CrosstabPlugin       id: 'crosstab'
-  requires: ['categorical' | 'ordinal', 'segment']
-  produces: CrosstabResult — { table, indexValues, sigLetters }
-  charts: ['heatmap', 'groupedBar']
-
-SignificancePlugin   id: 'kw_significance'
-  requires: ['continuous' | 'ordinal', 'segment']
-  produces: SignificanceResult — { perColumn: { H, p, df, epsilonSquared }[] }
-  charts: ['significanceMap', 'groupedBar']
-  preconditions: [minGroupSize(5)]
-
-PostHocPlugin        id: 'posthoc'
-  requires: ['continuous' | 'ordinal', 'segment']
-  dependsOn: ['kw_significance']
-  produces: PostHocResult — { pairwise: MWResult[][], bonferroniAdjusted: boolean }
-  charts: ['horizontalBar']
-```
-
-### Batch 2 — scale analysis
-
-```
-ReliabilityPlugin    id: 'cronbach'
-  requires: ['ordinal', 'n>30']
-  produces: CronbachResult — { alpha, itemTotal[], alphaIfDeleted[] }
-  IMPORTANT: reads ColumnDefinition.transformStack for reverseCode flags
-             reversed items are handled automatically — do not re-reverse
-
-FactorPlugin         id: 'efa'
-  requires: ['ordinal', 'n>100']
-  produces: FactorResult — { loadings, eigenvalues, varianceExplained, screePlot }
-  charts: ['scatterPlot']
-  preconditions: [minN(100), kmo(0.6)]
-```
-
-### Batch 3 — regression and prediction
-
-```
-RegressionPlugin     id: 'regression'
-  requires: ['continuous', 'n>30']
-  produces: RegressionResult — already typed in engine/types.ts
-  charts: ['betaImportance', 'scatterPlot']
-  preconditions: [vifCheck(10), normalityOfResiduals]
-
-DriverPlugin         id: 'driver_analysis'
-  requires: ['continuous', 'segment', 'n>100']
-  dependsOn: ['regression']
-  produces: DriverResult — { predictors: { name, beta, importance }[] }
-  charts: ['betaImportance']
-```
-
-### Batch 4 — correlation and profiles
-
-```
-CorrelationPlugin    id: 'correlation'
-  requires: ['continuous']
-  produces: CorrelationResult — { matrix, pValues }
-  charts: ['heatmap', 'scatterPlot']
-
-PointBiserialPlugin  id: 'point_biserial'
-  requires: ['binary', 'continuous']
-  produces: PointBiserialResult — { r, p, meanGroup0, meanGroup1 }
-
-SegmentProfilePlugin id: 'segment_profile'
-  requires: ['continuous' | 'ordinal', 'segment']
-  produces: SegmentProfileResult — { perSegment: { label, means, vsAverage }[] }
-  charts: ['radarChart', 'groupedBar']
-```
-
----
-
-## FlowRegistry — replaces FLOW_REGISTRY
-
-```typescript
-// src/engine/FlowRegistry.ts
-interface FlowDefinition {
-  id: string
-  label: string
-  pluginSequence: string[]    // plugin IDs in execution order
-  requires: DataCapability[]  // what data must be present to trigger this flow
-  priority: number
-  dependsOn?: string[]        // other flow IDs that must complete first
-}
-
-// Example:
-const RatingWithSegmentFlow: FlowDefinition = {
-  id: 'rating_segment',
-  label: 'Rating + Segments',
-  pluginSequence: ['frequency', 'crosstab', 'kw_significance', 'posthoc'],
-  requires: ['ordinal', 'segment'],
-  priority: 1,
-}
-```
-
-Flows self-declare their plugin sequences. `CapabilityMatcher` determines which flows can run. No hardcoded conditions anywhere.
-
----
-
-## StepResult shape — all plugins return this
-
-```typescript
-interface StepResult {
-  pluginId: string
-  data: unknown                    // typed by plugin's OutputContract
-  charts: ChartConfig[]            // ready to render — data + layout + config
-  findings: FindingInput[]         // passed to FindingsStore.add()
-  plainLanguage: string            // from plugin.plainLanguage(this)
-  assumptions: AssumptionCheck[]   // passed/failed preconditions
-  logEntry: Partial<AnalysisLogEntry>  // caller completes with userId, fingerprint, version
-}
-```
-
----
-
-## Chart generation — how plugins produce charts
-
-Plugins produce `ChartConfig` objects inside `StepResult.charts`. They never render anything. `ChartContainer` reads the config and passes it to `PlotlyChart`.
-
-```typescript
-// Inside a plugin's run() function:
-const charts: ChartConfig[] = [
-  {
-    id: `${pluginId}_diverging_${Date.now()}`,
-    type: 'divergingStackedBar',
-    data: buildDivergingData(result),   // pure function, returns Plotly.Data[]
-    layout: {
-      title: { text: scaleGroup.label },
-      barmode: 'relative',
-    },
-    config: baseConfig,   // imported from src/engine/chartDefaults.ts
-    stepId: pluginId,
-    edits: {},            // empty — user fills these via ChartEditor
+// On declaration:
+AnalysisLog.append({
+  type: 'missing_strategy_declared',
+  payload: {
+    strategy,
+    nMissing: totalMissingCount,
+    variablesAbove20pct: columnIds,
+    littlesMCARResult: { chiSq, df, p, interpretation }
   }
-]
+  // + userId, dataFingerprint, dataVersion as always
+})
 ```
 
-Create `src/engine/chartDefaults.ts` with the base Plotly config:
+Little's MCAR test result must be shown before the user chooses. If `p < 0.05` (not MCAR), surface a warning that listwise deletion may introduce bias.
+
+### RecodePanel — driven by DetectionLayer output
+
+Pre-populate from `DatasetNode.detectionResult.flags` where `type === 'reverse_coding_candidate'`. The user confirms or dismisses each flag. Confirmed flags become `ReverseCodeTransform` entries in the column's `transformStack` via `datasetGraph.addTransform()`.
+
+**Rule:** the panel never writes to `rawValues`. It only calls `addTransform()`.
+
+### ComputePanel — formula builder
 
 ```typescript
-export const baseConfig: Partial<Plotly.Config> = {
-  responsive: true,
-  displayModeBar: true,
-  modeBarButtonsToRemove: ['lasso2d', 'select2d'],
-  toImageButtonOptions: { format: 'png', height: 600, width: 900, scale: 2 },
+// Supported functions in formula editor:
+'MEAN'   | 'SUM'    | 'MIN'   | 'MAX'
+'LOG'    | 'SQRT'   | 'ABS'   | 'ZSCORE'
+'IF'     | 'ROUND'
+
+// Columns suffixed _r in formulas reference the reversed version
+// Formula stored as string in ComputeVariableTransform.formula
+// Re-executed from source on every resolveColumn() call — never stores computed result
+```
+
+### PrepLog strip
+
+Always visible at the bottom of the preparation workspace. Shows:
+- Missing strategy declared / not declared
+- Count of pending DetectionFlags
+- Count of active transforms
+- "Run Analysis →" button — disabled until missing strategy is declared
+
+---
+
+## Track 2 — Report Generation
+
+### ReportSchema — serializable JSON, not a component tree
+
+```typescript
+// src/report/schema/ReportSchema.ts
+interface ReportSchema {
+  id: string
+  version: number
+  createdAt: number
+  createdBy: string              // userId
+
+  sourceDatasetIds: string[]     // DatasetGraph node IDs
+  analysisLogSnapshot: string[]  // log entry IDs that produced findings
+
+  // Re-runnable: schema can be applied to new data
+  sections: ReportSection[]
 }
 
-export const darkLayout: Partial<Plotly.Layout> = {
-  paper_bgcolor: 'rgba(0,0,0,0)',
-  plot_bgcolor: 'rgba(0,0,0,0)',
-  font: { family: 'Inter, sans-serif', size: 12 },
-  margin: { l: 60, r: 20, t: 50, b: 80 },
+type ReportSection =
+  | { type: 'executive_summary'; findingRefs: string[] }
+  | { type: 'finding'; findingId: string; theme?: string }
+  | { type: 'chart'; chartId: string; caption?: string }
+  | { type: 'narrative'; text: string }
+  | { type: 'ai_narrative'; prompt: string; cachedResult: string | null; generatedAt: number | null }
+  | { type: 'segment_profile'; segmentId: string }
+  | { type: 'driver'; outcomeVariable: string }
+  | { type: 'conditional'; showIf: string; section: ReportSection }
+  // showIf examples: 'R2 > 0.3', 'alpha > 0.7', 'p < 0.05'
+```
+
+**Rule:** `ReportSchema` contains no renderer-specific properties — no slide counts, no font sizes, no animation order. If a property only makes sense for one output format, it belongs in that renderer, not the schema.
+
+**Rule:** schema must be re-runnable against new data. Every `findingId` and `chartId` references a `AnalysisLog` entry. A schema applied to wave 2 data produces wave 2 results with the same structure.
+
+### ReportRenderer — dumb executor
+
+```typescript
+// src/report/renderer/ReportRenderer.ts
+interface ReportRenderer {
+  render(schema: ReportSchema, stores: AllStores): RendererOutput
+  // RendererOutput is format-specific
+}
+
+// Four renderers — all consume the same ReportSchema:
+class PDFRenderer implements ReportRenderer      // src/report/renderer/PDFRenderer.ts
+class PPTXRenderer implements ReportRenderer     // src/report/renderer/PPTXRenderer.ts
+class DOCXRenderer implements ReportRenderer     // src/report/renderer/DOCXRenderer.ts
+class PresentationRenderer implements ReportRenderer  // full-screen interactive
+```
+
+**Rule:** no renderer contains business logic. All conditional display (`showIf`) is evaluated by a shared `evaluateCondition(expr, stores)` function before the renderer receives the section. The renderer only executes, never decides.
+
+### Report builder UI
+
+```
+src/components/Report/
+├── ReportBuilder.tsx     — schema editor — not a renderer
+├── FindingsList.tsx      — reads FindingsStore, drag to reorder
+├── ChartSelector.tsx     — pick which charts to include
+├── SectionEditor.tsx     — edit narrative text, add commentary
+├── ExportPanel.tsx       — trigger PDF/PPTX/DOCX download
+```
+
+### FDR correction — run before report generation
+
+```typescript
+// Before compiling the report schema, always offer:
+FindingsStore.applyFDRCorrection('bh')
+// Benjamini-Hochberg is preferred for market research
+// Bonferroni available as stricter option
+// Logs to AnalysisLog: { type: 'fdr_correction_applied', method, nTests, adjustedPValues[] }
+```
+
+---
+
+## Track 3 — Session Persistence
+
+### IndexedDB via idb
+
+```typescript
+// src/stores/persistence.ts
+import { openDB } from 'idb'
+
+const db = await openDB('mrst', 1, {
+  upgrade(db) {
+    db.createObjectStore('sessions')
+    db.createObjectStore('columnData')
+    db.createObjectStore('analysisLog')
+  }
+})
+
+// Auto-save — subscribe to datasetGraph store
+useDatasetGraphStore.subscribe(
+  debounce(async (state) => {
+    await db.put('sessions', serializeStores(), 'current')
+    // rawValues stored separately per column
+    for (const node of state.nodes) {
+      for (const group of node.parsedData.groups) {
+        for (const col of group.columns) {
+          await db.put('columnData', col.rawValues, col.id)
+        }
+      }
+    }
+  }, 2000)
+)
+
+// Auto-restore on app load
+const saved = await db.get('sessions', 'current')
+if (saved) rehydrateAllStores(saved)
+```
+
+### Session file export
+
+```typescript
+// src/stores/sessionFile.ts
+// Export: .mrst file (market-research-stats-toolkit)
+async function exportSession(): Promise<void> {
+  const payload = JSON.stringify({
+    schemaVersion: 1,
+    exportedAt: Date.now(),
+    stores: serializeAllStores()  // includes rawValues
+  })
+  const compressed = await compress(payload)
+  downloadFile(compressed, `session_${dateString()}.mrst`)
+}
+
+// Import: read → validate schemaVersion → restore
+async function importSession(file: File): Promise<void> {
+  const text = await decompress(await file.arrayBuffer())
+  const payload = JSON.parse(text)
+  if (payload.schemaVersion !== 1) throw new Error('Incompatible session version')
+  rehydrateAllStores(payload.stores)
 }
 ```
 
 ---
 
-## Runner split — build now
+## SelectionStore — build after core flow is stable
 
 ```typescript
-// src/runners/IStepRunner.ts
-interface IStepRunner {
-  run(plugin: AnalysisPlugin, session: SessionState): Promise<StepResult>
-  onProgress?: (step: number, total: number) => void
-  onViolation?: (violation: AssumptionViolation) => void
+// src/stores/selectionStore.ts
+interface DataSelection {
+  columns: ColumnDefinition[]
+  rowFilter: FilterExpression | null
+  cellRange: CellRange | null
+  sourceDataset: DatasetNode
 }
 
-// src/runners/InteractiveRunner.ts
-// Awaits human review. Renders NextStepButton. Does not auto-advance.
-// Assumption violations shown inline — user decides whether to proceed.
-
-// src/runners/HeadlessRunner.ts
-// Runs all plugins without UI. Progress via onProgress callback.
-// Assumption violations → AnalysisLog entry + finding flagged. NEVER silent.
+// RULE: SelectionStore never imports from SessionStore
+// Cross-store reads via selectors.ts only
 ```
 
-**Before building:** confirm whether HeadlessRunner is Option A (power-user shortcut) or Option B (primary flow). Record the decision in a comment at the top of `HeadlessRunner.ts`. Do not default.
+`AnalysisButtonPanel` is a reactive view of `CapabilityMatcher.resolve(currentSelection)`. Green = runnable, grey = blocked with reason from `plugin.preconditions`. Results surface inline below the grid. User pins to `FindingsStore` if wanted. Every run logged to `AnalysisLog`.
 
 ---
 
 ## What NOT to implement yet
 
-- DetectionLayer semantic checks (Claude API) — statistical checks only for now
-- DatasetGraph multi-node flows — single-node plugins must be stable first
-- SelectionStore / AnalysisButtonPanel — after all 11 plugins work
-- ReportSchema + ReportRenderer — next phase
-- Supabase — after IndexedDB confirmed working
+- DatasetGraph multi-node flows (wave comparison, benchmarks) — single-node stable first
+- Supabase — after IndexedDB confirmed in production
+- CFA — requires SEM framework decision
+- Qualtrics / SPSS adapters — need sample data files
