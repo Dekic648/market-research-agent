@@ -1,280 +1,273 @@
-# CLAUDE.md — v4
-## Market Research Stats Toolkit — Preparation Layer + Report Phase
+# CLAUDE.md — v5
+## Market Research Stats Toolkit — Multi-Dataset + Production Phase
 
-> **Swap this in when:** All 11 plugins are implemented and producing correct results, both runners work, Phases 4–6 (DetectionLayer) are complete.
-> Confirm: `FrequencyPlugin` through `SegmentProfilePlugin` all pass their own test suites. `InteractiveRunner` and `HeadlessRunner` both produce `StepResult` correctly.
+> **Swap this in when:** All 11 plugins work, preparation layer complete, report generation complete (PDF + PPTX exporting), session persistence working (IndexedDB + .mrst), SelectionStore and AnalysisButtonPanel implemented.
+> This is the platform phase — everything before this was building the engine. Now you extend it.
 
 ---
 
 ## What exists at this point
 
-```
-v2/src/
-├── engine/
-│   ├── stats-engine.ts         — fully typed, weights? on all aggregation functions
-│   ├── resolveColumn.ts        — in use by all plugins
-│   ├── chartDefaults.ts        — baseConfig, darkLayout
-├── parsers/
-│   ├── ParserRegistry.ts
-│   ├── fingerprint.ts          — ColumnFingerprint complete
-│   ├── adapters/PasteGridAdapter.ts
-├── detection/
-│   ├── types.ts
-│   ├── statisticalChecks.ts    — all 6 checks implemented
-│   ├── semanticChecks.ts       — Claude API, cached per column
-│   ├── detectionLayer.ts       — orchestrator, flags logged
-├── plugins/
-│   ├── AnalysisRegistry.ts
-│   ├── FrequencyPlugin.ts      — and all 10 others
-│   ├── [11 plugins total]
-├── runners/
-│   ├── IStepRunner.ts
-│   ├── InteractiveRunner.ts
-│   ├── HeadlessRunner.ts
-├── engine/
-│   ├── CapabilityMatcher.ts
-├── stores/ [all 5 complete]
-```
+The full single-dataset analysis pipeline is complete and working:
 
-All 7 non-negotiable rules still apply in full.
+- 11 analysis plugins, all tested
+- Data preparation layer (MissingDataPanel, RecodePanel, ComputePanel)
+- DetectionLayer (statistical + semantic)
+- TransformationStack + resolveColumn()
+- ReportSchema + all renderers (PDF, PPTX, DOCX, Presentation)
+- Session persistence (IndexedDB + .mrst)
+- SelectionStore + AnalysisButtonPanel
+- Both runners (InteractiveRunner + HeadlessRunner)
+
+All 7 non-negotiable rules from v1 still apply in full.
 
 ---
 
-## Current priority — three parallel tracks
+## Current priority — four tracks
 
-1. **Data Preparation Layer** — the UI between paste and analysis
-2. **Report generation** — ReportSchema + ReportRenderer
-3. **Session persistence** — IndexedDB + .mrst file
+1. **DatasetGraph multi-node** — wave comparison, benchmarks, multi-brand
+2. **Supabase** — auth, session sync, collaboration groundwork
+3. **Advanced statistical methods** — from the methods priority list
+4. **Parser adapters** — Qualtrics, SPSS, SurveyMonkey
 
-Build in this order. Preparation first — it gates analysis correctness. Report second — it completes the researcher workflow. Persistence third — it's the last infrastructure piece before Supabase consideration.
+Build in this order. Multi-dataset first — it's the most architecturally significant. Supabase second — it unblocks collaboration. Methods third — ongoing, never fully done. Adapters fourth — each one needs sample data to test against before building.
 
 ---
 
-## Track 1 — Data Preparation Layer
+## Track 1 — DatasetGraph multi-node flows
 
-This is the mandatory step between column tagging and analysis. Three panels, one mandatory action.
+Single-dataset analysis worked against one `DatasetNode`. Multi-node flows involve two or more nodes connected by edges.
 
-### Component structure
-
-```
-src/components/DataPreparation/
-├── PrepWorkspace.tsx         — three-panel layout, pipeline position indicator
-├── MissingDataPanel.tsx      — MANDATORY — user cannot skip this
-├── RecodePanel.tsx           — pre-populated from DetectionFlags
-├── ComputePanel.tsx          — formula editor
-├── PrepLog.tsx               — always-visible strip at bottom
-```
-
-### MissingDataPanel — the one mandatory step
+### Activating multi-node
 
 ```typescript
-// User must declare strategy before "Run Analysis" button activates
-type MissingDataStrategy = 'listwise' | 'pairwise' | 'mean_imputation'
+// src/engine/CapabilityMatcher.ts — add multi-node resolution
+CapabilityMatcher.resolveGraph(graph: DatasetGraph): MultiNodeCapabilitySet
+// Walks graph edges, identifies compatible node pairs
+// Returns available cross-dataset analyses
+```
 
-// On declaration:
-AnalysisLog.append({
-  type: 'missing_strategy_declared',
-  payload: {
-    strategy,
-    nMissing: totalMissingCount,
-    variablesAbove20pct: columnIds,
-    littlesMCARResult: { chiSq, df, p, interpretation }
-  }
-  // + userId, dataFingerprint, dataVersion as always
+### Edge types and what they enable
+
+```typescript
+'same_survey'         // same questionnaire, different samples — comparison
+'wave_comparison'     // same questionnaire, sequential time points — tracking
+'external_reference'  // benchmark data — overlay, index against
+'benchmark'          // readonly platform data — compare without exposing
+```
+
+### Cross-dataset plugins to build
+
+```
+WaveComparisonPlugin    id: 'wave_comparison'
+  requires: DatasetEdge.relationship === 'wave_comparison'
+  produces: { wave1: StepResult, wave2: StepResult, delta: DeltaResult }
+  charts: ['groupedBar' with wave labels, 'scatterPlot' for correlation wave1 vs wave2]
+  key output: which items changed significantly between waves (McNemar for binary, paired t-test for continuous)
+
+BenchmarkOverlayPlugin  id: 'benchmark_overlay'
+  requires: DatasetEdge.relationship === 'benchmark' | 'external_reference'
+  produces: { primary: StepResult, benchmark: BenchmarkResult, indexValues: number[] }
+  charts: ['horizontalBar' with benchmark line]
+  rule: readonly node data never sent to Claude API — check node.readonly before any external call
+
+MultiSamplePlugin       id: 'multi_sample'
+  requires: DatasetEdge.relationship === 'same_survey', n >= 2 nodes
+  produces: multi-group comparison with ANOVA/KW across all samples
+```
+
+### Alignment validation
+
+Before any cross-dataset flow runs, validate the edge:
+
+```typescript
+// If edge has alignmentKey — validate respondent ID overlap
+// If no alignmentKey — validate row counts match
+// If neither valid — edge.alignmentValid = false, cross-dataset flows blocked with reason shown
+```
+
+---
+
+## Track 2 — Supabase integration
+
+### What Supabase replaces / extends
+
+- **Replaces:** anonymous session in IndexedDB with authenticated user session in Postgres
+- **Extends:** .mrst file export with cloud sync
+- **Enables:** collaboration (two users, one session), session sharing via link
+
+### Setup
+
+```bash
+npm install @supabase/supabase-js
+```
+
+### Schema — two tables only
+
+```sql
+-- users handled by Supabase Auth
+
+create table sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  session_json jsonb not null,    -- all store state except rawValues
+  schema_version int default 1
+);
+
+create table column_data (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid references sessions not null,
+  column_id text not null,
+  raw_values jsonb not null        -- rawValues[] stored separately — can be large
+);
+
+-- Row-level security — users read own sessions only
+alter table sessions enable row level security;
+create policy "users own sessions" on sessions
+  using (auth.uid() = user_id);
+```
+
+### Sync strategy — IndexedDB as cache, Supabase as source of truth
+
+```typescript
+// On save: write to IndexedDB immediately, sync to Supabase async
+// On load: check Supabase first, fall back to IndexedDB if offline
+// Conflict resolution: last-write-wins on updated_at timestamp
+
+// src/stores/syncManager.ts
+const SyncManager = {
+  async save(session: SerializedSession): Promise<void>,
+  async load(sessionId?: string): Promise<SerializedSession | null>,
+  async list(): Promise<SessionMeta[]>,  // user's saved sessions
+  isOnline(): boolean
+}
+```
+
+### Collaboration groundwork
+
+```typescript
+// userId field on AnalysisLogEntry is already in place — this is the payoff
+// createdBy on TransformationStack transforms is already in place
+
+// Realtime subscription — add when collaboration feature is formally scoped:
+const channel = supabase.channel(`session:${sessionId}`)
+channel.on('postgres_changes', { event: 'UPDATE', table: 'sessions' }, (payload) => {
+  // Merge remote changes into local stores
+  // Conflict resolution strategy: TBD when feature is scoped
 })
 ```
 
-Little's MCAR test result must be shown before the user chooses. If `p < 0.05` (not MCAR), surface a warning that listwise deletion may introduce bias.
+---
 
-### RecodePanel — driven by DetectionLayer output
+## Track 3 — Advanced statistical methods
 
-Pre-populate from `DatasetNode.detectionResult.flags` where `type === 'reverse_coding_candidate'`. The user confirms or dismisses each flag. Confirmed flags become `ReverseCodeTransform` entries in the column's `transformStack` via `datasetGraph.addTransform()`.
+Build from the priority list in `v2/docs/handoff/spss_gaps.html`. Each method becomes an `AnalysisPlugin` that registers with `AnalysisRegistry`. The infrastructure already supports them — just write the plugin.
 
-**Rule:** the panel never writes to `rawValues`. It only calls `addTransform()`.
+### Immediate priority plugins
 
-### ComputePanel — formula builder
+```
+OrdinalRegressionPlugin     id: 'ordinal_regression'
+  requires: ['ordinal', 'n>30']
+  maps to: stats-engine ordinalRegression() — add if not present
+  preconditions: [parallelLinesTest]
 
-```typescript
-// Supported functions in formula editor:
-'MEAN'   | 'SUM'    | 'MIN'   | 'MAX'
-'LOG'    | 'SQRT'   | 'ABS'   | 'ZSCORE'
-'IF'     | 'ROUND'
+MediationPlugin             id: 'mediation'
+  requires: ['continuous', 'n>50']
+  maps to: stats-engine mediation() — add if not present
+  produces: { directEffect, indirectEffect, totalEffect, bootstrapCI }
 
-// Columns suffixed _r in formulas reference the reversed version
-// Formula stored as string in ComputeVariableTransform.formula
-// Re-executed from source on every resolveColumn() call — never stores computed result
+ModerationPlugin            id: 'moderation'
+  requires: ['continuous', 'n>50']
+  maps to: stats-engine moderation() — add if not present
+  produces: { interactionEffect, simpleSlopes, jnRegions }
+
+RepeatedMeasuresANOVAPlugin id: 'rm_anova'
+  requires: ['repeated', 'n>20']
+  maps to: stats-engine repeatedMeasuresANOVA() — add if not present
+  preconditions: [mauchlysSphericity]
+  produces: { F, p, partialEtaSq, sphericityCorrection }
+
+VanWestendorpPlugin         id: 'van_westendorp'
+  requires: ['ordinal']  // four price questions
+  maps to: stats-engine vanWestendorp() — add if not present
+  produces: { pmc, pmep, rp, opp, acceptableRange }
+
+PowerAnalysisPlugin         id: 'power_analysis'
+  // meta-plugin — no data required, user inputs effect size + alpha + power
+  produces: { requiredN, achievedPower }
+  note: one power function per test type (ttest, anova, correlation, chisq)
 ```
 
-### PrepLog strip
+### Adding functions to stats-engine.ts
 
-Always visible at the bottom of the preparation workspace. Shows:
-- Missing strategy declared / not declared
-- Count of pending DetectionFlags
-- Count of active transforms
-- "Run Analysis →" button — disabled until missing strategy is declared
+When a plugin requires a function not yet in the engine:
+
+1. Add the function to `src/engine/stats-engine.ts`
+2. Add its typed return interface to `src/engine/types.ts`
+3. Add `weights?` parameter if it's an aggregation function
+4. Add at least 3 test cases to `tests/engine/`
+5. Run `npx vitest run` — all 85+ existing tests must still pass
 
 ---
 
-## Track 2 — Report Generation
+## Track 4 — Parser adapters
 
-### ReportSchema — serializable JSON, not a component tree
+Each adapter requires sample data files to test against before building. Do not build an adapter without sample data.
+
+### When sample data is available:
 
 ```typescript
-// src/report/schema/ReportSchema.ts
-interface ReportSchema {
-  id: string
-  version: number
-  createdAt: number
-  createdBy: string              // userId
-
-  sourceDatasetIds: string[]     // DatasetGraph node IDs
-  analysisLogSnapshot: string[]  // log entry IDs that produced findings
-
-  // Re-runnable: schema can be applied to new data
-  sections: ReportSection[]
+// src/parsers/adapters/QualtricsAdapter.ts
+export const QualtricsAdapter = {
+  canHandle(raw: string): boolean,  // detects double-header Qualtrics export format
+  parse(raw: string): PastedData    // merges header rows, classifies columns
 }
+ParserRegistry.register(QualtricsAdapter)
 
-type ReportSection =
-  | { type: 'executive_summary'; findingRefs: string[] }
-  | { type: 'finding'; findingId: string; theme?: string }
-  | { type: 'chart'; chartId: string; caption?: string }
-  | { type: 'narrative'; text: string }
-  | { type: 'ai_narrative'; prompt: string; cachedResult: string | null; generatedAt: number | null }
-  | { type: 'segment_profile'; segmentId: string }
-  | { type: 'driver'; outcomeVariable: string }
-  | { type: 'conditional'; showIf: string; section: ReportSection }
-  // showIf examples: 'R2 > 0.3', 'alpha > 0.7', 'p < 0.05'
+// src/parsers/adapters/SPSSAdapter.ts
+// src/parsers/adapters/SurveyMonkeyAdapter.ts
 ```
 
-**Rule:** `ReportSchema` contains no renderer-specific properties — no slide counts, no font sizes, no animation order. If a property only makes sense for one output format, it belongs in that renderer, not the schema.
-
-**Rule:** schema must be re-runnable against new data. Every `findingId` and `chartId` references a `AnalysisLog` entry. A schema applied to wave 2 data produces wave 2 results with the same structure.
-
-### ReportRenderer — dumb executor
-
-```typescript
-// src/report/renderer/ReportRenderer.ts
-interface ReportRenderer {
-  render(schema: ReportSchema, stores: AllStores): RendererOutput
-  // RendererOutput is format-specific
-}
-
-// Four renderers — all consume the same ReportSchema:
-class PDFRenderer implements ReportRenderer      // src/report/renderer/PDFRenderer.ts
-class PPTXRenderer implements ReportRenderer     // src/report/renderer/PPTXRenderer.ts
-class DOCXRenderer implements ReportRenderer     // src/report/renderer/DOCXRenderer.ts
-class PresentationRenderer implements ReportRenderer  // full-screen interactive
-```
-
-**Rule:** no renderer contains business logic. All conditional display (`showIf`) is evaluated by a shared `evaluateCondition(expr, stores)` function before the renderer receives the section. The renderer only executes, never decides.
-
-### Report builder UI
-
-```
-src/components/Report/
-├── ReportBuilder.tsx     — schema editor — not a renderer
-├── FindingsList.tsx      — reads FindingsStore, drag to reorder
-├── ChartSelector.tsx     — pick which charts to include
-├── SectionEditor.tsx     — edit narrative text, add commentary
-├── ExportPanel.tsx       — trigger PDF/PPTX/DOCX download
-```
-
-### FDR correction — run before report generation
-
-```typescript
-// Before compiling the report schema, always offer:
-FindingsStore.applyFDRCorrection('bh')
-// Benjamini-Hochberg is preferred for market research
-// Bonferroni available as stricter option
-// Logs to AnalysisLog: { type: 'fdr_correction_applied', method, nTests, adjustedPValues[] }
-```
+**Rule:** each adapter outputs the same normalized `PastedData`. The rest of the system never knows which adapter was used.
 
 ---
 
-## Track 3 — Session Persistence
+## Ongoing maintenance rules
 
-### IndexedDB via idb
+### When a new analysis is requested
 
-```typescript
-// src/stores/persistence.ts
-import { openDB } from 'idb'
+1. Check `v2/docs/handoff/spss_gaps.html` for severity and priority
+2. Check if `stats-engine.ts` already has the function — it has 59
+3. If not, add the function, add types, add tests, verify no regressions
+4. Write the plugin, write its tests, register it
+5. The flow engine discovers it automatically — no other files to edit
 
-const db = await openDB('mrst', 1, {
-  upgrade(db) {
-    db.createObjectStore('sessions')
-    db.createObjectStore('columnData')
-    db.createObjectStore('analysisLog')
-  }
-})
+### When a client requests a new data format
 
-// Auto-save — subscribe to datasetGraph store
-useDatasetGraphStore.subscribe(
-  debounce(async (state) => {
-    await db.put('sessions', serializeStores(), 'current')
-    // rawValues stored separately per column
-    for (const node of state.nodes) {
-      for (const group of node.parsedData.groups) {
-        for (const col of group.columns) {
-          await db.put('columnData', col.rawValues, col.id)
-        }
-      }
-    }
-  }, 2000)
-)
+1. Get sample data files first
+2. Write an adapter in `src/parsers/adapters/`
+3. Register it in `ParserRegistry`
+4. Test against sample data
+5. Never modify existing adapters
 
-// Auto-restore on app load
-const saved = await db.get('sessions', 'current')
-if (saved) rehydrateAllStores(saved)
-```
+### When a finding needs to be added to a report
 
-### Session file export
-
-```typescript
-// src/stores/sessionFile.ts
-// Export: .mrst file (market-research-stats-toolkit)
-async function exportSession(): Promise<void> {
-  const payload = JSON.stringify({
-    schemaVersion: 1,
-    exportedAt: Date.now(),
-    stores: serializeAllStores()  // includes rawValues
-  })
-  const compressed = await compress(payload)
-  downloadFile(compressed, `session_${dateString()}.mrst`)
-}
-
-// Import: read → validate schemaVersion → restore
-async function importSession(file: File): Promise<void> {
-  const text = await decompress(await file.arrayBuffer())
-  const payload = JSON.parse(text)
-  if (payload.schemaVersion !== 1) throw new Error('Incompatible session version')
-  rehydrateAllStores(payload.stores)
-}
-```
+1. `FindingsStore.add()` — the only entry point
+2. `FindingsStore.applyFDRCorrection('bh')` before report compilation if > 5 significance tests ran
+3. `ReportSchema` references finding by ID — never embeds finding data directly
 
 ---
 
-## SelectionStore — build after core flow is stable
+## CLAUDE_methods.md
 
-```typescript
-// src/stores/selectionStore.ts
-interface DataSelection {
-  columns: ColumnDefinition[]
-  rowFilter: FilterExpression | null
-  cellRange: CellRange | null
-  sourceDataset: DatasetNode
-}
-
-// RULE: SelectionStore never imports from SessionStore
-// Cross-store reads via selectors.ts only
-```
-
-`AnalysisButtonPanel` is a reactive view of `CapabilityMatcher.resolve(currentSelection)`. Green = runnable, grey = blocked with reason from `plugin.preconditions`. Results surface inline below the grid. User pins to `FindingsStore` if wanted. Every run logged to `AnalysisLog`.
+A permanent reference file lives alongside this one at `v2/docs/handoff/CLAUDE_methods.md`. It contains every planned statistical method as a plugin stub — engine function, required capabilities, preconditions, and priority. Consult it whenever building a new plugin or adding to the engine.
 
 ---
 
-## What NOT to implement yet
+## What still not to implement
 
-- DatasetGraph multi-node flows (wave comparison, benchmarks) — single-node stable first
-- Supabase — after IndexedDB confirmed in production
-- CFA — requires SEM framework decision
-- Qualtrics / SPSS adapters — need sample data files
+- CFA (Confirmatory Factor Analysis) — requires SEM framework, separate architectural decision, not a simple plugin
+- Conjoint analysis — heavy computation, separate decision
+- On-premise / self-hosted Supabase — only if a specific client requires it
