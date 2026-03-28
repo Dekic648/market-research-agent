@@ -5,7 +5,7 @@
  * rawValues are never accessed directly by analysis code.
  */
 import { describe, it, expect } from 'vitest'
-import { resolveColumn } from '../../src/engine/resolveColumn'
+import { resolveColumn, resolvePrefixedOrdinalSortKeys } from '../../src/engine/resolveColumn'
 import type { ColumnDefinition } from '../../src/types/dataTypes'
 import type { TypedTransform } from '../../src/types/transforms'
 
@@ -370,5 +370,117 @@ describe('resolveColumn — immutability', () => {
     expect(transforms.length).toBe(stackCopy.length)
     expect(transforms[0].type).toBe(stackCopy[0].type)
     expect(transforms[0].enabled).toBe(stackCopy[0].enabled)
+  })
+})
+
+// ============================================================
+// Prefixed ordinal resolution
+// ============================================================
+
+describe('resolveColumn — prefixed ordinal', () => {
+  function makePrefixedCol(values: (string | null)[]): ColumnDefinition {
+    return {
+      id: 'seg',
+      name: 'Player Type',
+      type: 'category',
+      categorySubtype: 'prefixed_ordinal',
+      subtype: 'prefixed_ordinal',
+      nRows: values.length,
+      nMissing: values.filter((v) => v === null).length,
+      rawValues: values,
+      fingerprint: null,
+      semanticDetectionCache: null,
+      transformStack: [],
+      sensitivity: 'anonymous',
+      declaredScaleRange: null,
+    }
+  }
+
+  it('strips prefix for display values', () => {
+    const col = makePrefixedCol(['0) NonPayer', '1) ExPayer', '2) Minnow', '3) Dolphin', '4) Whale'])
+    const result = resolveColumn(col)
+    expect(result).toEqual(['NonPayer', 'ExPayer', 'Minnow', 'Dolphin', 'Whale'])
+  })
+
+  it('preserves rawValues unchanged', () => {
+    const raw = ['0) NonPayer', '1) ExPayer']
+    const col = makePrefixedCol(raw)
+    resolveColumn(col)
+    expect(col.rawValues).toEqual(['0) NonPayer', '1) ExPayer'])
+  })
+
+  it('handles null values', () => {
+    const col = makePrefixedCol(['0) NonPayer', null, '2) Minnow'])
+    const result = resolveColumn(col)
+    expect(result).toEqual(['NonPayer', null, 'Minnow'])
+  })
+
+  it('passes through values without prefix pattern', () => {
+    const col = makePrefixedCol(['0) NonPayer', 'Unknown', '2) Minnow'])
+    const result = resolveColumn(col)
+    expect(result).toEqual(['NonPayer', 'Unknown', 'Minnow'])
+  })
+
+  it('does NOT strip prefix for non-prefixed_ordinal columns', () => {
+    const col = makeColumn(['0) NonPayer', '1) ExPayer', '2) Minnow'])
+    // Default makeColumn has no categorySubtype
+    const result = resolveColumn(col)
+    expect(result).toEqual(['0) NonPayer', '1) ExPayer', '2) Minnow'])
+  })
+})
+
+describe('resolvePrefixedOrdinalSortKeys', () => {
+  function makePrefixedCol(values: (string | null)[]): ColumnDefinition {
+    return {
+      id: 'seg',
+      name: 'Player Type',
+      type: 'category',
+      categorySubtype: 'prefixed_ordinal',
+      subtype: 'prefixed_ordinal',
+      nRows: values.length,
+      nMissing: values.filter((v) => v === null).length,
+      rawValues: values,
+      fingerprint: null,
+      semanticDetectionCache: null,
+      transformStack: [],
+      sensitivity: 'anonymous',
+      declaredScaleRange: null,
+    }
+  }
+
+  it('extracts numeric sort keys', () => {
+    const col = makePrefixedCol(['0) NonPayer', '1) ExPayer', '2) Minnow', '3) Dolphin', '4) Whale'])
+    const keys = resolvePrefixedOrdinalSortKeys(col)
+    expect(keys).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('handles double-digit prefixes correctly', () => {
+    const col = makePrefixedCol([
+      '1) First', '2) Second', '3) Third', '10) Tenth', '11) Eleventh', '20) Twentieth',
+    ])
+    const keys = resolvePrefixedOrdinalSortKeys(col)
+    expect(keys).toEqual([1, 2, 3, 10, 11, 20])
+
+    // Verify sort order: 10 sorts AFTER 2, not before
+    const pairs = col.rawValues.map((v, i) => ({ label: v, sortKey: keys[i] }))
+    const sorted = [...pairs].sort((a, b) => (a.sortKey ?? 0) - (b.sortKey ?? 0))
+    expect(sorted[0].label).toBe('1) First')
+    expect(sorted[1].label).toBe('2) Second')
+    expect(sorted[2].label).toBe('3) Third')
+    expect(sorted[3].label).toBe('10) Tenth')
+    expect(sorted[4].label).toBe('11) Eleventh')
+    expect(sorted[5].label).toBe('20) Twentieth')
+  })
+
+  it('handles null values', () => {
+    const col = makePrefixedCol(['0) A', null, '2) C'])
+    const keys = resolvePrefixedOrdinalSortKeys(col)
+    expect(keys).toEqual([0, null, 2])
+  })
+
+  it('returns null for values without prefix', () => {
+    const col = makePrefixedCol(['0) A', 'NoPrefix', '2) C'])
+    const keys = resolvePrefixedOrdinalSortKeys(col)
+    expect(keys).toEqual([0, null, 2])
   })
 })

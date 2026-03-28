@@ -36,7 +36,42 @@ export function resolveColumn(
     values = applyTransform(values, transform)
   }
 
+  // Prefixed ordinal: strip "N) " prefix for display, preserve numeric sort order.
+  // rawValues keep the original string. Resolved values get the display label.
+  // Sort order is handled by resolvePrefixedOrdinalSortKeys() — call separately when needed.
+  const catSub = definition.categorySubtype ?? definition.subtype
+  if (catSub === 'prefixed_ordinal') {
+    values = values.map((v) => {
+      if (v === null) return null
+      const str = String(v)
+      const match = str.match(/^\d+\)\s*(.*)$/)
+      return match ? match[1] : str
+    })
+  }
+
   return values
+}
+
+/**
+ * Extract numeric sort keys from a prefixed ordinal column.
+ * Returns parallel array of sort keys (numbers) for ordering.
+ *
+ * "0) NonPayer" → 0
+ * "10) Veteran" → 10
+ * "2) Minnow"  → 2
+ *
+ * Use this for chart axis ordering and significance test group ordering.
+ * Sort by these keys, display the resolveColumn() output.
+ */
+export function resolvePrefixedOrdinalSortKeys(
+  definition: ColumnDefinition
+): (number | null)[] {
+  return definition.rawValues.map((v) => {
+    if (v === null) return null
+    const str = String(v)
+    const match = str.match(/^(\d+)\)/)
+    return match ? parseInt(match[1], 10) : null
+  })
 }
 
 /**
