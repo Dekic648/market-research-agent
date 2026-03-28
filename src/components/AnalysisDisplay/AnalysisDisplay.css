@@ -96,6 +96,71 @@
   line-height: 1.5;
 }
 
+.finding-headline { margin-bottom: 8px; }
+
+.finding-key-metrics {
+  display: flex;
+  gap: 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-light);
+  margin-bottom: 4px;
+}
+
+.finding-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 60px;
+}
+
+.finding-metric-value {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.finding-metric-label {
+  font-size: 10px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.finding-details-toggle { margin-top: 4px; }
+
+.finding-details-btn {
+  font-size: 11px;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px 0;
+}
+
+.finding-details-btn:hover { color: var(--text-muted); }
+
+.finding-details-body {
+  padding: 8px 0;
+  border-top: 1px solid var(--border-light);
+}
+
+.finding-detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.finding-detail-label {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.finding-detail-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
 .finding-suppress {
   margin-top: 6px;
   font-size: 11px;

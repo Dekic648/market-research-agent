@@ -97,6 +97,7 @@ const FactorPlugin: AnalysisPlugin = {
   title: 'Exploratory Factor Analysis',
   desc: 'EFA with Varimax rotation, scree plot, and factor loadings.',
   priority: 60,
+  reportPriority: 5,
   requires: ['ordinal', 'n>30'],
   preconditions: [minN],
   produces: { description: 'Factor loadings, eigenvalues, variance explained', fields: { result: 'FactorResult' } } satisfies OutputContract,
@@ -156,7 +157,7 @@ const FactorPlugin: AnalysisPlugin = {
       data: { result },
       charts,
       findings,
-      plainLanguage: `${nFactors} factor(s) explain ${(totalVar * 100).toFixed(1)}% of variance across ${data.columns.length} items.`,
+      plainLanguage: this.plainLanguage({ pluginId: 'efa', data: { result }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions,
       logEntry: { type: 'analysis_run', payload: { pluginId: 'efa', nFactors, totalVariance: totalVar } },
     }
@@ -166,7 +167,21 @@ const FactorPlugin: AnalysisPlugin = {
     const r = (res.data as { result: FactorResult }).result
     if (!r) return 'No factor analysis results.'
     const totalVar = r.cumulativeVariance[r.cumulativeVariance.length - 1] ?? 0
-    return `${r.nFactors} factor(s) explain ${(totalVar * 100).toFixed(1)}% of total variance.`
+    // Identify top-loading items per factor
+    const factorDescriptions: string[] = []
+    for (let f = 0; f < r.nFactors && f < 3; f++) {
+      const itemsWithLoadings = r.columnNames.map((name, i) => ({ name, loading: r.loadings[i]?.[f] ?? 0 }))
+        .filter((x) => Math.abs(x.loading) > 0.4)
+        .sort((a, b) => Math.abs(b.loading) - Math.abs(a.loading))
+        .slice(0, 2)
+      if (itemsWithLoadings.length > 0) {
+        factorDescriptions.push(itemsWithLoadings.map((x) => x.name).join(' and '))
+      }
+    }
+    const clusterStr = factorDescriptions.length > 0
+      ? ` ${factorDescriptions[0]} cluster together${factorDescriptions.length > 1 ? `; ${factorDescriptions[1]} form a second group` : ''}.`
+      : ''
+    return `The ${r.columnNames.length} items group into ${r.nFactors} underlying themes, explaining ${(totalVar * 100).toFixed(0)}% of the total variation.${clusterStr}`
   },
 }
 

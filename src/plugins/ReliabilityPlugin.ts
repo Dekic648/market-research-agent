@@ -66,6 +66,7 @@ const ReliabilityPlugin: AnalysisPlugin = {
   title: "Cronbach's Alpha",
   desc: 'Scale reliability with item-total correlations and alpha-if-deleted diagnostics.',
   priority: 50,
+  reportPriority: 5,
   requires: ['ordinal', 'n>30'],
   preconditions: [],
   produces: { description: 'Cronbach α, item-total correlations, alpha-if-deleted', fields: { result: 'ReliabilityResult' } } satisfies OutputContract,
@@ -132,7 +133,15 @@ const ReliabilityPlugin: AnalysisPlugin = {
   plainLanguage(res: PluginStepResult): string {
     const r = (res.data as { result: ReliabilityResult }).result
     if (!r) return 'No reliability results.'
-    return `Cronbach's α = ${r.alpha.toFixed(3)} (${r.level}) across ${r.k} items (n = ${r.n}). ${r.weakItems.length > 0 ? `Consider removing: ${r.weakItems.join(', ')}.` : 'All items contribute well to the scale.'}`
+    const reliableWord = r.alpha >= 0.7 ? 'reliable' : r.alpha >= 0.6 ? 'questionable' : 'unreliable'
+    let interpretation = ''
+    if (r.alpha >= 0.9) interpretation = 'The items are highly consistent and can be confidently combined into a single score.'
+    else if (r.alpha >= 0.8) interpretation = 'The items are consistent enough to combine into a composite score.'
+    else if (r.alpha >= 0.7) interpretation = 'The scale meets the minimum threshold for research use.'
+    else if (r.alpha >= 0.6) interpretation = 'The scale is borderline — consider revising items before drawing conclusions.'
+    else interpretation = 'The items do not form a coherent scale and should not be combined.'
+    const weakNote = r.weakItems.length > 0 ? ` Removing ${r.weakItems.join(' or ')} may improve consistency.` : ''
+    return `The ${r.k} items form a ${reliableWord} scale (alpha = ${r.alpha.toFixed(2)}). ${interpretation}${weakNote}`
   },
 }
 

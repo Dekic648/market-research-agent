@@ -89,6 +89,7 @@ const SegmentProfilePlugin: AnalysisPlugin = {
   title: 'Segment Profiles',
   desc: 'Per-segment mean profiles compared to overall average.',
   priority: 90,
+  reportPriority: 2,
   requires: ['ordinal', 'segment'],
   preconditions: [],
   produces: { description: 'Per-segment means vs overall', fields: { result: 'SegmentProfileResult' } } satisfies OutputContract,
@@ -163,7 +164,7 @@ const SegmentProfilePlugin: AnalysisPlugin = {
 
     return {
       pluginId: 'segment_profile', data: { result }, charts, findings,
-      plainLanguage: `${profiles.length} segment profiles across ${data.columns.length} variables.`,
+      plainLanguage: this.plainLanguage({ pluginId: 'segment_profile', data: { result }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'segment_profile', nSegments: profiles.length } },
     }
@@ -171,8 +172,22 @@ const SegmentProfilePlugin: AnalysisPlugin = {
 
   plainLanguage(res: PluginStepResult): string {
     const r = (res.data as { result: SegmentProfileResult }).result
-    if (!r) return 'No segment profiles.'
-    return `${r.profiles.length} segments profiled across ${r.columnNames.length} variables.`
+    if (!r || r.profiles.length === 0) return 'No segment profiles.'
+    // Find the segment with the biggest deviation from average
+    let bestSeg: { segment: string | number; variable: string; vsAverage: number } | null = null
+    for (const p of r.profiles) {
+      for (const m of p.means) {
+        if (!bestSeg || Math.abs(m.vsAverage) > Math.abs(bestSeg.vsAverage)) {
+          bestSeg = { segment: p.segment, variable: m.column, vsAverage: m.vsAverage }
+        }
+      }
+    }
+    if (bestSeg && Math.abs(bestSeg.vsAverage) > 5) {
+      const overall = r.overallMeans.find((m) => m.column === bestSeg!.variable)
+      const overallStr = overall ? ` (vs overall mean of ${overall.mean.toFixed(1)})` : ''
+      return `"${bestSeg.segment}" stands out for ${bestSeg.variable} (${bestSeg.vsAverage > 0 ? '+' : ''}${bestSeg.vsAverage.toFixed(0)}% vs average${overallStr}). ${r.profiles.length} segments profiled across ${r.columnNames.length} variables.`
+    }
+    return `All ${r.profiles.length} segments are relatively similar across the ${r.columnNames.length} variables measured.`
   },
 }
 

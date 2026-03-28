@@ -58,6 +58,7 @@ const PointBiserialPlugin: AnalysisPlugin = {
   title: 'Point-Biserial Correlation',
   desc: 'Correlation between a binary variable and continuous variables.',
   priority: 85,
+  reportPriority: 4,
   requires: ['binary', 'continuous'],
   preconditions: [],
   produces: { description: 'Point-biserial r, p-value, group means', fields: { results: 'PBResult[]' } } satisfies OutputContract,
@@ -115,7 +116,7 @@ const PointBiserialPlugin: AnalysisPlugin = {
 
     return {
       pluginId: 'point_biserial', data: { results }, charts, findings,
-      plainLanguage: `${results.filter((r) => r.p < 0.05).length} significant point-biserial correlation(s).`,
+      plainLanguage: this.plainLanguage({ pluginId: 'point_biserial', data: { results }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'point_biserial', nPairs: results.length } },
     }
@@ -123,8 +124,15 @@ const PointBiserialPlugin: AnalysisPlugin = {
 
   plainLanguage(res: PluginStepResult): string {
     const r = (res.data as { results: PBResult[] }).results
-    if (!r) return 'No point-biserial results.'
-    return `${r.filter((x) => x.p < 0.05).length} significant binary-continuous correlation(s).`
+    if (!r || r.length === 0) return 'No point-biserial results.'
+    const sig = r.filter((x) => x.p < 0.05).sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
+    if (sig.length === 0) {
+      return `No significant differences between ${r[0].binaryName} groups on the continuous variables.`
+    }
+    const top = sig[0]
+    const strength = Math.abs(top.r) > 0.5 ? 'strong' : Math.abs(top.r) > 0.3 ? 'moderate' : 'weak'
+    const higherGroup = top.mean1 > top.mean0 ? 'Group 1' : 'Group 0'
+    return `${top.binaryName} group differences on ${top.columnName} are ${strength} (r = ${top.r.toFixed(2)}). ${higherGroup} scores higher on average.`
   },
 }
 

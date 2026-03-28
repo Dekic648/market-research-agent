@@ -58,6 +58,7 @@ const DriverPlugin: AnalysisPlugin = {
   title: 'Key Driver Analysis',
   desc: 'Identifies which factors most strongly drive the outcome variable.',
   priority: 75,
+  reportPriority: 6,
   requires: ['continuous', 'n>30'],
   forbids: ['binary'],
   dependsOn: ['regression'],
@@ -147,7 +148,7 @@ const DriverPlugin: AnalysisPlugin = {
 
     return {
       pluginId: 'driver_analysis', data: { result }, charts, findings,
-      plainLanguage: `Top driver of ${outcome.name}: "${topDriver?.name}" (${(topDriver?.importance * 100).toFixed(1)}%).`,
+      plainLanguage: this.plainLanguage({ pluginId: 'driver_analysis', data: { result }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: {
         pluginId: 'driver_analysis',
@@ -165,8 +166,16 @@ const DriverPlugin: AnalysisPlugin = {
 
   plainLanguage(res: PluginStepResult): string {
     const r = (res.data as { result: DriverResult }).result
-    if (!r) return 'No driver analysis results.'
-    return `Top driver of ${r.outcomeName}: "${r.predictors[0]?.name}" at ${(r.predictors[0]?.importance * 100).toFixed(1)}% relative importance.`
+    if (!r || r.predictors.length === 0) return 'No driver analysis results.'
+    const top = r.predictors[0]
+    const second = r.predictors.length > 1 ? r.predictors[1] : null
+    const third = r.predictors.length > 2 ? r.predictors[2] : null
+    let text = `${top.name} is the most important driver of ${r.outcomeName} — improving it has the strongest predicted impact.`
+    const others = [second, third].filter((p) => p && p.importance > 0.05)
+    if (others.length > 0) {
+      text += ` ${others.map((p) => p!.name).join(' and ')} also contribute${others.length === 1 ? 's' : ''} meaningfully.`
+    }
+    return text
   },
 }
 

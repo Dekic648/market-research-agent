@@ -157,6 +157,7 @@ const CrosstabPlugin: AnalysisPlugin = {
   title: 'Cross-tabulation',
   desc: 'Percentage breakdown by segment with index values.',
   priority: 20,
+  reportPriority: 2,
 
   requires: ['ordinal', 'segment'],
   preconditions: [],
@@ -216,7 +217,22 @@ const CrosstabPlugin: AnalysisPlugin = {
   plainLanguage(result: PluginStepResult): string {
     const cts = (result.data as { crosstabs: CrosstabResult[] }).crosstabs
     if (!cts || cts.length === 0) return 'No crosstab data.'
-    return `${cts.length} variable(s) cross-tabulated by ${cts[0].segmentName}. N = ${cts[0].grandTotal}.`
+    // Find the most over-indexed cell across all crosstabs
+    let bestCell: { colName: string; row: string | number; col: string | number; index: number } | null = null
+    for (const ct of cts) {
+      for (let ri = 0; ri < ct.rowLabels.length; ri++) {
+        for (let ci = 0; ci < ct.colLabels.length; ci++) {
+          const idx = ct.table[ri][ci].index
+          if (!bestCell || idx > bestCell.index) {
+            bestCell = { colName: ct.columnName, row: ct.rowLabels[ri], col: ct.colLabels[ci], index: idx }
+          }
+        }
+      }
+    }
+    if (bestCell && bestCell.index > 130) {
+      return `"${bestCell.row}" on ${bestCell.colName} is over-represented in the "${bestCell.col}" segment (index ${bestCell.index.toFixed(0)} vs 100 average). ${cts.length} variable(s) cross-tabulated by ${cts[0].segmentName}.`
+    }
+    return `Response patterns are relatively even across ${cts[0].segmentName} groups. ${cts.length} variable(s) cross-tabulated (N = ${cts[0].grandTotal}).`
   },
 }
 

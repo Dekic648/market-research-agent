@@ -141,6 +141,7 @@ const PostHocPlugin: AnalysisPlugin = {
   title: 'Post-hoc Pairwise Comparisons',
   desc: 'Mann-Whitney pairwise tests with Bonferroni correction for significant KW results.',
   priority: 40,
+  reportPriority: 3,
 
   requires: ['ordinal', 'segment'],
   forbids: ['binary'],
@@ -192,7 +193,7 @@ const PostHocPlugin: AnalysisPlugin = {
       data: { results },
       charts,
       findings,
-      plainLanguage: `${totalSig} of ${totalPairs} pairwise comparisons significant after Bonferroni correction.`,
+      plainLanguage: this.plainLanguage({ pluginId: 'posthoc', data: { results }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'posthoc', totalPairs, totalSignificant: totalSig } },
     }
@@ -200,10 +201,32 @@ const PostHocPlugin: AnalysisPlugin = {
 
   plainLanguage(result: PluginStepResult): string {
     const res = (result.data as { results: PostHocResult[] }).results
-    if (!res) return 'No post-hoc results.'
-    const totalSig = res.reduce((s, ph) => s + ph.pairwise.filter((pw) => pw.significant).length, 0)
+    if (!res || res.length === 0) return 'No post-hoc results.'
+    // Find the most significant pairwise comparison
+    let best: { colName: string; groupA: string | number; groupB: string | number; p: number; meanA: number; meanB: number } | null = null
+    for (const ph of res) {
+      const highMeanIdx = ph.groupMeans.indexOf(Math.max(...ph.groupMeans))
+      const lowMeanIdx = ph.groupMeans.indexOf(Math.min(...ph.groupMeans))
+      for (const pw of ph.pairwise) {
+        if (pw.significant && (!best || pw.pBonferroni < best.p)) {
+          const idxA = ph.groupLabels.indexOf(pw.groupA)
+          const idxB = ph.groupLabels.indexOf(pw.groupB)
+          best = {
+            colName: ph.columnName,
+            groupA: pw.groupA, groupB: pw.groupB, p: pw.pBonferroni,
+            meanA: idxA >= 0 ? ph.groupMeans[idxA] : 0,
+            meanB: idxB >= 0 ? ph.groupMeans[idxB] : 0,
+          }
+        }
+      }
+    }
+    if (best) {
+      const higher = best.meanA >= best.meanB ? best.groupA : best.groupB
+      const lower = best.meanA >= best.meanB ? best.groupB : best.groupA
+      return `"${higher}" and "${lower}" differ most on ${best.colName} after correcting for multiple comparisons (p ${best.p < 0.001 ? '< .001' : '= ' + best.p.toFixed(3)}). "${higher}" scores higher.`
+    }
     const totalPairs = res.reduce((s, ph) => s + ph.nComparisons, 0)
-    return `${totalSig} of ${totalPairs} pairwise comparisons significant after Bonferroni correction.`
+    return `No pairwise comparisons were significant after Bonferroni correction (${totalPairs} comparisons tested).`
   },
 }
 

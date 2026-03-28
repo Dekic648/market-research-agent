@@ -52,6 +52,7 @@ const CorrelationPlugin: AnalysisPlugin = {
   title: 'Correlation Matrix',
   desc: 'Pearson correlation matrix with significance markers.',
   priority: 80,
+  reportPriority: 4,
   requires: ['continuous'],
   preconditions: [],
   produces: { description: 'Correlation matrix with p-values', fields: { result: 'CorrelationResult' } } satisfies OutputContract,
@@ -99,7 +100,7 @@ const CorrelationPlugin: AnalysisPlugin = {
 
     return {
       pluginId: 'correlation', data: { result }, charts, findings,
-      plainLanguage: `${strongPairs.length} strong correlation(s) found (|r| > .5) among ${data.columns.length} variables.`,
+      plainLanguage: this.plainLanguage({ pluginId: 'correlation', data: { result }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'correlation', nVars: data.columns.length, nStrong: strongPairs.length } },
     }
@@ -108,7 +109,13 @@ const CorrelationPlugin: AnalysisPlugin = {
   plainLanguage(res: PluginStepResult): string {
     const r = (res.data as { result: CorrelationResult }).result
     if (!r) return 'No correlation results.'
-    return `${r.strongPairs.length} strong correlation(s) among ${r.columnNames.length} variables.`
+    if (r.strongPairs.length === 0) {
+      return `No strong correlations found among the ${r.columnNames.length} variables (all |r| < .5).`
+    }
+    const top = r.strongPairs[0]
+    const strength = Math.abs(top.r) > 0.7 ? 'strongly' : 'moderately'
+    const direction = top.r > 0 ? 'positively' : 'negatively'
+    return `${top.a} and ${top.b} are ${strength} ${direction} correlated (r = ${top.r.toFixed(2)}). Higher ${top.a} tends to go with ${top.r > 0 ? 'higher' : 'lower'} ${top.b}.`
   },
 }
 

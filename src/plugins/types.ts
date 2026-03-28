@@ -113,6 +113,7 @@ export interface AnalysisPlugin {
   title: string
   desc: string
   priority: number                  // lower = runs earlier in flow
+  reportPriority: number            // lower = appears earlier in report output
 
   requires: DataCapability[]
   forbids?: DataCapability[]        // plugin excluded if ANY of these capabilities present

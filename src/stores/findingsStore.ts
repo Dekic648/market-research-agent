@@ -5,6 +5,31 @@
 import { create } from 'zustand'
 import type { Finding } from '../types/dataTypes'
 
+/** Report priority by plugin/step ID — lower = appears earlier in report */
+const REPORT_PRIORITY: Record<string, number> = {
+  frequency: 1,
+  crosstab: 2,
+  segment_profile: 2,
+  kw_significance: 3,
+  posthoc: 3,
+  correlation: 4,
+  point_biserial: 4,
+  cronbach: 5,
+  efa: 5,
+  regression: 6,
+  driver_analysis: 6,
+}
+
+/** Normalize effect size to 0–1 scale for cross-metric comparison */
+function normalizeEffectSize(finding: Finding): number {
+  if (finding.effectSize === null) return 0
+  const e = Math.abs(finding.effectSize)
+  // R², r, epsilon² are already 0–1 scale
+  // Cohen's d: cap at 2.0 and divide by 2
+  if (e > 1) return Math.min(1, e / 2)
+  return e
+}
+
 interface FindingsStoreState {
   findings: Finding[]
   fdrApplied: boolean
@@ -26,6 +51,9 @@ interface FindingsStoreState {
 
   /** Get findings for a specific step */
   filterByStep: (stepId: string) => Finding[]
+
+  /** Findings sorted by reportPriority, then by effect size within tier */
+  getOrderedForReport: () => Finding[]
 
   /**
    * Post-accumulation pass: adjust all p-values for multiple comparisons.
@@ -103,6 +131,17 @@ export const useFindingsStore = create<FindingsStoreState>()((set, get) => ({
 
   filterByStep: (stepId) => {
     return get().findings.filter((f) => f.stepId === stepId)
+  },
+
+  getOrderedForReport: () => {
+    const findings = get().findings.filter((f) => !f.suppressed)
+    return [...findings].sort((a, b) => {
+      const prioA = REPORT_PRIORITY[a.stepId] ?? 99
+      const prioB = REPORT_PRIORITY[b.stepId] ?? 99
+      if (prioA !== prioB) return prioA - prioB
+      // Within same priority tier, higher effect size first
+      return normalizeEffectSize(b) - normalizeEffectSize(a)
+    })
   },
 
   applyFDRCorrection: (method) =>

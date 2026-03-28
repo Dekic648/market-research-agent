@@ -1,8 +1,14 @@
 /**
  * FindingCard — displays a single analysis finding.
- * Supports flags (e.g. influential_outliers) rendered inline.
+ *
+ * Layout hierarchy (researcher-first):
+ *   Zone 1: Plain language headline (always visible)
+ *   Zone 2: Key numbers strip (always visible, max 3 items)
+ *   Zone 3: Statistical details (collapsed by default)
+ *   Flags & verification results (always visible, below details)
  */
 
+import { useState } from 'react'
 import './AnalysisDisplay.css'
 
 interface FindingFlag {
@@ -17,6 +23,11 @@ interface VerificationResult {
   message: string
 }
 
+interface KeyMetric {
+  label: string
+  value: string
+}
+
 interface FindingCardProps {
   title: string
   summary: string
@@ -29,35 +40,87 @@ interface FindingCardProps {
   onSuppress?: () => void
 }
 
+function extractKeyMetrics(props: FindingCardProps): KeyMetric[] {
+  const metrics: KeyMetric[] = []
+
+  if (props.effectLabel && typeof props.effectLabel === 'string') {
+    metrics.push({ label: 'Effect', value: props.effectLabel })
+  }
+
+  if (props.pValue !== null && typeof props.pValue === 'number') {
+    metrics.push({ label: 'p-value', value: props.pValue < 0.001 ? '< .001' : props.pValue.toFixed(3) })
+  }
+
+  if (props.effectSize !== null && typeof props.effectSize === 'number') {
+    metrics.push({ label: 'Effect size', value: props.effectSize.toFixed(3) })
+  }
+
+  return metrics.slice(0, 3)
+}
+
 export function FindingCard({
-  title, summary, significant, pValue, effectLabel, flags, verificationResults, onSuppress,
+  title, summary, significant, pValue, effectSize, effectLabel, flags, verificationResults, onSuppress,
 }: FindingCardProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const keyMetrics = extractKeyMetrics({ title, summary, significant, pValue, effectSize, effectLabel })
+
   return (
     <div className={`finding-card ${significant ? 'finding-sig' : 'finding-ns'}`}>
-      <div className="finding-header">
+      {/* Zone 1 — Plain language headline */}
+      <div className="finding-headline">
         <span className={`finding-badge ${significant ? 'badge-teal' : 'badge-amber'}`}>
           {significant ? 'Significant' : 'Not significant'}
         </span>
-        {pValue !== null && typeof pValue === 'number' && (
-          <span className="finding-p">
-            p {pValue < 0.001 ? '< .001' : `= ${pValue.toFixed(3)}`}
-          </span>
-        )}
-        {effectLabel && typeof effectLabel === 'string' && (
-          <span className="finding-effect">{effectLabel} effect</span>
-        )}
+        <h4 className="finding-title">{String(title ?? '')}</h4>
+        <p className="finding-summary">{String(summary ?? '')}</p>
       </div>
-      <h4 className="finding-title">{String(title ?? '')}</h4>
-      <p className="finding-summary">{String(summary ?? '')}</p>
 
-      {/* Flags — e.g. influential outliers */}
+      {/* Zone 2 — Key numbers strip (max 3) */}
+      {keyMetrics.length > 0 && (
+        <div className="finding-key-metrics">
+          {keyMetrics.map((m, i) => (
+            <div key={i} className="finding-metric">
+              <span className="finding-metric-value">{m.value}</span>
+              <span className="finding-metric-label">{m.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Zone 3 — Full statistics (collapsed by default) */}
+      <div className="finding-details-toggle">
+        <button
+          className="finding-details-btn"
+          onClick={() => setDetailsOpen(!detailsOpen)}
+        >
+          {detailsOpen ? '▾ Hide statistical details' : '▸ Statistical details'}
+        </button>
+      </div>
+      {detailsOpen && (
+        <div className="finding-details-body">
+          {pValue !== null && typeof pValue === 'number' && (
+            <div className="finding-detail-row">
+              <span className="finding-detail-label">p-value</span>
+              <span className="finding-detail-value">{pValue < 0.001 ? '< .001' : pValue.toFixed(4)}</span>
+            </div>
+          )}
+          {effectSize !== null && typeof effectSize === 'number' && (
+            <div className="finding-detail-row">
+              <span className="finding-detail-label">Effect size</span>
+              <span className="finding-detail-value">{effectSize.toFixed(4)}{effectLabel ? ` (${effectLabel})` : ''}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Flags — e.g. influential outliers (always visible) */}
       {flags && flags.length > 0 && flags.map((flag, i) => (
         <div key={i} className={`finding-flag finding-flag-${flag.severity}`}>
           {String(flag.message)}
         </div>
       ))}
 
-      {/* Verification results — Simpson's Paradox, moderation */}
+      {/* Verification results — Simpson's Paradox, moderation (always visible) */}
       {verificationResults && verificationResults.length > 0 && verificationResults.map((vr, i) => {
         const prefix = vr.checkType === 'simpsons_paradox' ? 'Confound check' : 'Moderation check'
         return (

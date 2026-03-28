@@ -220,6 +220,7 @@ const FrequencyPlugin: AnalysisPlugin = {
   title: 'Frequency Distribution',
   desc: 'Distribution analysis with Top2/Bot2 box scores and net score.',
   priority: 10,
+  reportPriority: 1,
 
   requires: ['ordinal'],
   preconditions: [],
@@ -281,15 +282,19 @@ const FrequencyPlugin: AnalysisPlugin = {
 
     if (freqs.length === 1) {
       const f = freqs[0]
-      if (f.mean !== null) {
-        return `${f.columnName}: Mean = ${f.mean.toFixed(2)} (n = ${f.n}). Top 2 Box = ${f.top2box.toFixed(1)}%, Bottom 2 Box = ${f.bot2box.toFixed(1)}%, Net Score = ${f.netScore > 0 ? '+' : ''}${f.netScore.toFixed(1)}pp.`
+      const top = f.items[0]
+      const second = f.items.length > 1 ? f.items[1] : null
+      if (top) {
+        const topStr = `Most respondents chose "${top.value}" (${top.pct.toFixed(1)}%).`
+        const secondStr = second ? ` "${second.value}" was the next most common at ${second.pct.toFixed(1)}%.` : ''
+        return `${f.columnName}: ${topStr}${secondStr}`
       }
-      return `${f.columnName}: ${f.n} responses across ${f.items.length} categories. Most common: "${f.items[0]?.value}" (${f.items[0]?.pct.toFixed(1)}%).`
+      return `${f.columnName}: ${f.n} responses across ${f.items.length} categories.`
     }
 
-    const avgNet = freqs.reduce((s, f) => s + f.netScore, 0) / freqs.length
     const bestItem = freqs.reduce((best, f) => (f.top2box > best.top2box ? f : best))
-    return `${freqs.length} items analyzed. Average Net Score = ${avgNet > 0 ? '+' : ''}${avgNet.toFixed(1)}pp. Highest rated: "${bestItem.columnName}" (Top 2 Box = ${bestItem.top2box.toFixed(1)}%).`
+    const worstItem = freqs.reduce((worst, f) => (f.top2box < worst.top2box ? f : worst))
+    return `"${bestItem.columnName}" is the highest rated item (${bestItem.top2box.toFixed(0)}% positive). "${worstItem.columnName}" is the lowest rated (${worstItem.top2box.toFixed(0)}% positive).`
   },
 }
 

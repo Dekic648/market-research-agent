@@ -155,6 +155,7 @@ const SignificancePlugin: AnalysisPlugin = {
   title: 'Significance Testing (KW)',
   desc: 'Tests whether each variable differs significantly across segments using Kruskal-Wallis.',
   priority: 30,
+  reportPriority: 3,
 
   requires: ['ordinal', 'segment'],
   forbids: ['binary'],
@@ -200,20 +201,26 @@ const SignificancePlugin: AnalysisPlugin = {
 
     return {
       pluginId: 'kw_significance',
-      data: { results },
+      data: { results, segmentName: data.segment.name },
       charts,
       findings,
-      plainLanguage: `${sigCount} of ${results.length} variables show significant differences across segments (p < .05).`,
+      plainLanguage: this.plainLanguage({ pluginId: 'kw_significance', data: { results, segmentName: data.segment.name }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions,
       logEntry: { type: 'analysis_run', payload: { pluginId: 'kw_significance', nTested: results.length, nSignificant: sigCount } },
     }
   },
 
   plainLanguage(result: PluginStepResult): string {
-    const res = (result.data as { results: ColumnSignificance[] }).results
-    if (!res) return 'No significance results.'
-    const sigCount = res.filter((r) => r.p < 0.05).length
-    return `${sigCount} of ${res.length} variables differ significantly across segments.`
+    const d = result.data as { results: ColumnSignificance[]; segmentName?: string }
+    const res = d.results
+    if (!res || res.length === 0) return 'No significance results.'
+    const segName = d.segmentName ?? 'segment'
+    const sig = res.filter((r) => r.p < 0.05).sort((a, b) => a.p - b.p)
+    if (sig.length === 0) {
+      return `None of the ${res.length} variables show significant differences across ${segName} groups.`
+    }
+    const top = sig[0]
+    return `${top.columnName} scores differ most strongly across ${segName} groups (p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}, ${top.effectLabel} effect). ${sig.length} of ${res.length} variables show significant differences overall.`
   },
 }
 

@@ -62,6 +62,7 @@ const RegressionPlugin: AnalysisPlugin = {
   title: 'Linear Regression',
   desc: 'OLS regression with standardized betas and importance ranking.',
   priority: 70,
+  reportPriority: 6,
   requires: ['continuous', 'n>30'],
   forbids: ['binary'],
   preconditions: [],
@@ -157,8 +158,8 @@ const RegressionPlugin: AnalysisPlugin = {
     }]
 
     return {
-      pluginId: 'regression', data: { result }, charts, findings,
-      plainLanguage: `R² = ${reg.R2.toFixed(3)}. ${sigPredictors.length} of ${predictors.length} predictors significant.`,
+      pluginId: 'regression', data: { result, outcomeName: outcome.name }, charts, findings,
+      plainLanguage: this.plainLanguage({ pluginId: 'regression', data: { result, outcomeName: outcome.name }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: {
         pluginId: 'regression',
@@ -177,7 +178,15 @@ const RegressionPlugin: AnalysisPlugin = {
   plainLanguage(res: PluginStepResult): string {
     const r = (res.data as { result: RegressionResultData }).result
     if (!r) return 'No regression results.'
-    return `R² = ${r.R2.toFixed(3)} (adj = ${r.adjR2.toFixed(3)}). ${r.coefficients.filter((c) => c.name !== 'intercept' && c.p < 0.05).length} significant predictor(s).`
+    const predictors = r.coefficients.filter((c) => c.name !== 'intercept')
+    const sigPredictors = predictors.filter((c) => c.p < 0.05).sort((a, b) => Math.abs(b.beta) - Math.abs(a.beta))
+    const r2Pct = (r.R2 * 100).toFixed(0)
+    const outcomeName = (res.data as any).outcomeName ?? 'the outcome'
+    if (sigPredictors.length === 0) {
+      return `The model explains ${r2Pct}% of the variation in ${outcomeName}, but no individual predictor reaches significance.`
+    }
+    const top = sigPredictors[0]
+    return `${top.name} is the strongest predictor of ${outcomeName} (beta = ${top.beta.toFixed(2)}, p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}). The model explains ${r2Pct}% of the variation.`
   },
 }
 
