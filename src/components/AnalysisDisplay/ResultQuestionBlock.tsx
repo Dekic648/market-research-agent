@@ -73,6 +73,7 @@ export function ResultQuestionBlock({ group, defaultOpen, collapsible }: ResultQ
                 subgroupContext={f.subgroupContext}
                 weightedBy={f.weightedBy}
                 crossType={f.crossType}
+                stepId={f.stepId}
               />
             ))}
           </div>

@@ -197,7 +197,8 @@ const SignificancePlugin: AnalysisPlugin = {
         const groupLabels = Array.from(segGroups.keys()).sort((a, b) => String(a).localeCompare(String(b)))
         const highGroup = groupLabels[maxMeanIdx] ?? 'highest group'
         const lowGroup = groupLabels[minMeanIdx] ?? 'lowest group'
-        const summaryLanguage = `${r.columnName} differs across ${data.segment!.name} — ${highGroup} scores highest, ${lowGroup} lowest (${r.effectLabel} difference).`
+        const confidenceLevel = r.p < 0.001 ? 'Extremely unlikely to be random chance.' : r.p < 0.01 ? 'Very unlikely to be random.' : 'Unlikely to be random.'
+        const summaryLanguage = `There IS a clear difference between ${data.segment!.name} segments on ${r.columnName} — ${highGroup} scores highest, ${lowGroup} lowest. ${confidenceLevel}`
 
         return {
           type: 'significance',

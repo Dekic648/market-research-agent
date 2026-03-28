@@ -233,6 +233,53 @@
   font-size: 12px;
 }
 
+/* Badge tiers */
+.badge-muted {
+  background: var(--bg-elevated);
+  color: var(--text-faint);
+  border: 1px solid var(--border-light);
+}
+
+/* P-value color classes on metrics */
+.metric-p-sig .finding-metric-value { color: var(--teal); }
+.metric-p-marginal .finding-metric-value { color: var(--amber); }
+.metric-p-nonsig .finding-metric-value { color: var(--text-faint); }
+
+/* Metric footnote */
+.finding-metric-footnote {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 2px 0 4px;
+  line-height: 1.4;
+}
+
+/* Effect size explanation */
+.finding-effect-explanation {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  margin: 4px 0 6px;
+  line-height: 1.5;
+}
+
+/* "What does this mean?" educational toggle */
+.finding-explain-btn {
+  color: var(--accent);
+}
+
+.finding-explain-body {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--accent);
+  margin-bottom: 6px;
+}
+
 .finding-suppress {
   margin-top: 6px;
   font-size: 11px;

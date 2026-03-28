@@ -147,9 +147,12 @@ const CorrelationPlugin: AnalysisPlugin = {
     const rLabel = correlationMethod === 'spearman' ? 'rho' : 'r'
 
     const findings = strongPairs.slice(0, 5).map((pair) => {
+      const dir = pair.r > 0 ? 'higher' : 'lower'
       const summaryLanguage = Math.abs(pair.r) > 0.7
-        ? `${pair.a} and ${pair.b} move together — higher ${pair.a} consistently accompanies ${pair.r > 0 ? 'higher' : 'lower'} ${pair.b}.`
-        : `${pair.a} and ${pair.b} are weakly related.`
+        ? `${pair.a} and ${pair.b} move together — higher ${pair.a} consistently accompanies ${dir} ${pair.b}.`
+        : Math.abs(pair.r) > 0.4
+        ? `${pair.a} and ${pair.b} are moderately related — ${dir} ${pair.a} tends to accompany ${dir} ${pair.b}.`
+        : `${pair.a} and ${pair.b} show a weak relationship.`
 
       return {
         type: 'correlation',

@@ -181,51 +181,49 @@ export function TLDRReport() {
         </button>
       </div>
 
-      {/* Sections */}
-      {sections.map((section) => (
-        <div key={section.sectionKey} className="tldr-section">
-          <h3 className="tldr-section-header">{section.label}</h3>
-          <div className="tldr-section-findings">
-            {section.findings.map((f) => {
-              const metric = getKeyMetric(f)
-              const chart = findChart(f)
-              return (
-                <div key={f.id} className="tldr-finding">
-                  <div className="tldr-finding-header">
-                    <div className="tldr-finding-text">
-                      <p className="tldr-summary">{f.summaryLanguage}</p>
-                      {metric && (
-                        <span className="tldr-metric-pill">
-                          {metric.label}: {metric.value}
-                        </span>
-                      )}
-                      {f.crossType && (
-                        <span className="tldr-cross-badge">Survey × Behavioral</span>
-                      )}
-                    </div>
-                    <button className="tldr-copy-btn" onClick={() => handleCopyOne(f)} title="Copy">
-                      &#128203;
-                    </button>
+      {/* Numbered findings list */}
+      <ol className="tldr-findings-list">
+        {sections.flatMap((section) => section.findings).map((f, idx) => {
+          const metric = getKeyMetric(f)
+          const chart = findChart(f)
+          return (
+            <li key={f.id} className="tldr-finding">
+              <div className="tldr-finding-header">
+                <span className="tldr-finding-number">{idx + 1}</span>
+                <div className="tldr-finding-text">
+                  <p className="tldr-summary">{f.summaryLanguage}</p>
+                  <div className="tldr-finding-meta">
+                    {metric && (
+                      <span className="tldr-metric-pill">
+                        {metric.label}: {metric.value}
+                      </span>
+                    )}
+                    {f.crossType && (
+                      <span className="tldr-cross-badge">Survey × Behavioral</span>
+                    )}
                   </div>
-                  {/* Mini chart */}
-                  {chart && (
-                    <div className="tldr-mini-chart">
-                      <ChartContainer chart={{
-                        ...chart,
-                        layout: { ...chart.layout, title: undefined, showlegend: false,
-                          xaxis: { ...(chart.layout.xaxis as any ?? {}), title: undefined, showticklabels: false },
-                          yaxis: { ...(chart.layout.yaxis as any ?? {}), title: undefined },
-                          margin: { l: 40, r: 10, t: 10, b: 20 },
-                        },
-                      }} height={160} />
-                    </div>
-                  )}
                 </div>
-              )
-            })}
-          </div>
-        </div>
-      ))}
+                <button className="tldr-copy-btn" onClick={() => handleCopyOne(f)} title="Copy">
+                  &#128203;
+                </button>
+              </div>
+              {/* Mini chart */}
+              {chart && (
+                <div className="tldr-mini-chart">
+                  <ChartContainer chart={{
+                    ...chart,
+                    layout: { ...chart.layout, title: undefined, showlegend: false,
+                      xaxis: { ...(chart.layout.xaxis as any ?? {}), title: undefined, showticklabels: false },
+                      yaxis: { ...(chart.layout.yaxis as any ?? {}), title: undefined },
+                      margin: { l: 40, r: 10, t: 10, b: 20 },
+                    },
+                  }} height={160} />
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
 
       {/* Caveats */}
       {caveats.length > 0 && (

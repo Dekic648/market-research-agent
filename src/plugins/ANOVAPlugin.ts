@@ -231,8 +231,8 @@ const ANOVAPlugin: AnalysisPlugin = {
       title: `F(${result.dfBetween}, ${result.dfWithin}) = ${result.F.toFixed(2)}, p ${result.p < 0.001 ? '< .001' : '= ' + result.p.toFixed(3)} — ${result.etaLabel} effect`,
       summary: `One-way ANOVA shows ${col.name} ${result.p < 0.05 ? 'differs significantly' : 'does not differ significantly'} across ${groupLabels.length} groups (η² = ${etaSq.toFixed(3)} — ${result.etaLabel} effect).${welchUsed ? " Welch's correction applied — variances unequal." : ''}${sigPairs.length > 0 ? ` ${sigPairs.length} significant pairwise difference(s).` : ''}`,
       summaryLanguage: result.p < 0.05
-        ? `${col.name} differs across groups — ${groupLabels[highGroupIdx]} scores highest, ${groupLabels[lowGroupIdx]} lowest (${result.etaLabel} difference).`
-        : `${col.name} does not differ meaningfully across groups.`,
+        ? `There IS a clear difference in ${col.name} across groups — ${groupLabels[highGroupIdx]} scores highest, ${groupLabels[lowGroupIdx]} lowest. ${result.p < 0.001 ? 'Extremely unlikely to be random.' : 'Unlikely to be random.'}`
+        : `There is NO meaningful difference in ${col.name} across groups. The differences could easily be random.`,
       detail: JSON.stringify({ posthoc, groupMeans, groupLabels }),
       significant: result.p < 0.05,
       pValue: result.p,
