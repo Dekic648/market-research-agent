@@ -173,9 +173,9 @@ function buildTier2(
   }
 
   const tasks: AnalysisTask[] = []
-  const MAX_TASKS = 12
+  const MAX_TASKS = 20
 
-  // Helper to add a group comparison task set
+  // Helper to add a group comparison task set for a single column
   function addGroupTasks(
     col: ColumnWithBlock,
     seg: ColumnWithBlock,
@@ -186,7 +186,7 @@ function buildTier2(
     const colRef = ref(col.blockId, col.col.id)
     const segRef = ref(seg.blockId, seg.col.id)
 
-    // KW significance + posthoc
+    // KW significance
     if (pluginExists('kw_significance')) {
       tasks.push({
         id: nextId('kw_significance'),
@@ -219,9 +219,77 @@ function buildTier2(
     }
   }
 
-  // Priority 1: survey × survey segment
+  // Helper to add crosstab + segment profile for ALL columns in a block at once
+  function addCrosstabBlock(
+    cols: ColumnWithBlock[],
+    seg: ColumnWithBlock,
+    crossType: boolean
+  ) {
+    if (tasks.length >= MAX_TASKS || cols.length === 0) return
+    const segRef = ref(seg.blockId, seg.col.id)
+    const colRefs = cols.map(({ col, blockId }) => ref(blockId, col.id))
+    const sourceIds = [...new Set([...cols.map(({ blockId }) => blockId), seg.blockId])]
+    const blockLabel = cols[0]?.blockLabel ?? cols[0]?.col.name ?? 'Items'
+
+    // Crosstab: % distribution table + grouped bar chart
+    if (pluginExists('crosstab')) {
+      tasks.push({
+        id: nextId('crosstab'),
+        pluginId: 'crosstab',
+        label: `${blockLabel} by ${seg.col.name}`,
+        inputs: { columns: colRefs, segment: segRef },
+        sourceQuestionIds: sourceIds,
+        dependsOn: [],
+        proposedBy: 'system',
+        reason: `Cross-tabulation: % distribution by ${seg.col.name}`,
+        crossType,
+        status: 'proposed',
+      })
+    }
+
+    // Segment profiles
+    if (pluginExists('segment_profile') && tasks.length < MAX_TASKS) {
+      tasks.push({
+        id: nextId('segment_profile'),
+        pluginId: 'segment_profile',
+        label: `Segment profiles: ${blockLabel} by ${seg.col.name}`,
+        inputs: { columns: colRefs, segment: segRef },
+        sourceQuestionIds: sourceIds,
+        dependsOn: [],
+        proposedBy: 'system',
+        reason: `How each ${seg.col.name} segment rates across all items`,
+        crossType,
+        status: 'proposed',
+      })
+    }
+  }
+
+  // Priority 0: Crosstab tables — one per block × segment (ALL columns in block together)
+  // This is the most important visualization: % distribution table + grouped bar chart
   const surveyOrdinals = analyzable.filter(({ col }) => isSurveyFormat(col))
   const surveySegments = segments.filter(({ col }) => !isBehavioralMetric(col))
+  const behavioralMetrics = analyzable.filter(({ col }) => isBehavioralMetric(col))
+  const behavioralDimensions = segments.filter(({ col }) => col.role === 'dimension')
+
+  // Group survey columns by block for block-level crosstab
+  const blockGroups = new Map<string, ColumnWithBlock[]>()
+  for (const cwb of surveyOrdinals) {
+    if (!blockGroups.has(cwb.blockId)) blockGroups.set(cwb.blockId, [])
+    blockGroups.get(cwb.blockId)!.push(cwb)
+  }
+
+  for (const seg of surveySegments) {
+    for (const [, blockCols] of blockGroups) {
+      addCrosstabBlock(blockCols, seg, false)
+    }
+  }
+  for (const dim of behavioralDimensions) {
+    for (const [, blockCols] of blockGroups) {
+      addCrosstabBlock(blockCols, dim, true)
+    }
+  }
+
+  // Priority 1: KW significance per column × segment
   for (const seg of surveySegments) {
     for (const col of surveyOrdinals) {
       addGroupTasks(col, seg, false, `${col.col.name} by ${seg.col.name}`)
@@ -229,14 +297,12 @@ function buildTier2(
   }
 
   // Priority 2: cross-type comparisons
-  const behavioralMetrics = analyzable.filter(({ col }) => isBehavioralMetric(col))
   for (const seg of surveySegments) {
     for (const met of behavioralMetrics) {
       addGroupTasks(met, seg, true, `Do ${seg.col.name} groups differ in ${met.col.name}?`)
     }
   }
 
-  const behavioralDimensions = segments.filter(({ col }) => col.role === 'dimension')
   for (const dim of behavioralDimensions) {
     for (const col of surveyOrdinals) {
       addGroupTasks(col, dim, true, `Do ${dim.col.name} tiers rate ${col.col.name} differently?`)

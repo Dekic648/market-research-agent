@@ -171,7 +171,7 @@ describe('Tier 2 — Group Comparisons', () => {
     expect(crossTypeTasks.length).toBeGreaterThan(0)
   })
 
-  it('caps at 12 tasks', () => {
+  it('caps at 20 tasks', () => {
     // Many columns × many segments → should cap
     const cols = Array.from({ length: 5 }, (_, i) => makeCol(`Q${i}`))
     const segs = Array.from({ length: 3 }, (_, i) => makeSegmentCol(`Seg${i}`))
@@ -179,7 +179,7 @@ describe('Tier 2 — Group Comparisons', () => {
       makeBlock('q1', 'Questions', cols),
       ...segs.map((s, i) => makeBlock(`s${i}`, `Seg${i}`, [s], 'segment', 'category')),
     ])
-    expect(plan.tiers[1].tasks.length).toBeLessThanOrEqual(12)
+    expect(plan.tiers[1].tasks.length).toBeLessThanOrEqual(20)
   })
 })
 
