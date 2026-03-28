@@ -21,7 +21,16 @@ interface TierGroup {
 }
 
 export function TLDRReport() {
-  const orderedFindings = useFindingsStore((s) => s.getOrderedForReport())
+  const findings = useFindingsStore((s) => s.findings)
+  const orderedFindings = useMemo(() => {
+    const active = findings.filter((f) => !f.suppressed)
+    return [...active].sort((a, b) => {
+      const prioA = REPORT_PRIORITY[a.stepId] ?? 99
+      const prioB = REPORT_PRIORITY[b.stepId] ?? 99
+      if (prioA !== prioB) return prioA - prioB
+      return Math.abs(b.effectSize ?? 0) - Math.abs(a.effectSize ?? 0)
+    })
+  }, [findings])
 
   const executiveSummary = useMemo(
     () => buildExecutiveSummary(orderedFindings),
