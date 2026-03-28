@@ -18,7 +18,8 @@ interface KFoldCVResult {
   sdRMSE: number
   overfit: boolean
   overfitDelta: number
-  foldResults: Array<{ fold: number; trainN: number; testN: number; trainMetric: number; testMetric: number; testRMSE: number }>
+  foldResults: Array<{ fold: number; trainN: number; testN: number; trainMetric: number | undefined; testMetric: number; testRMSE: number }>
+  error?: string
 }
 
 interface RegressionResultData {

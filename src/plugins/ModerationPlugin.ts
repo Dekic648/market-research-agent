@@ -40,20 +40,21 @@ const ModerationPlugin: AnalysisPlugin = {
     const result = StatsEngine.moderation(x, w, y)
     if (result.error) throw new Error(result.error)
 
-    const intSig = result.interactionEffect?.significant ?? false
-    const lowDesc = result.simpleSlopes.lowMod.p < 0.05 ? 'significant' : 'not significant'
-    const highDesc = result.simpleSlopes.highMod.p < 0.05 ? 'significant' : 'not significant'
+    const intEffect = result.interactionEffect ?? { B: 0, se: 0, t: 0, p: 1, significant: false }
+    const slopes = result.simpleSlopes ?? { lowMod: { slope: 0, se: 0, t: 0, p: 1 }, highMod: { slope: 0, se: 0, t: 0, p: 1 } }
+    const r2Change = result.rSquaredChange ?? 0
+    const intSig = intEffect.significant ?? false
 
     const findings = [{
       type: 'moderation',
       title: intSig
         ? `${wCol.name} moderates ${xCol.name} → ${yCol.name}`
         : `${wCol.name} does not moderate ${xCol.name} → ${yCol.name}`,
-      summary: `Interaction p = ${result.interactionEffect.p.toFixed(3)}. R² change = ${result.rSquaredChange.toFixed(3)}.`,
-      detail: JSON.stringify({ simpleSlopes: result.simpleSlopes, jnRegions: result.jnRegions }),
+      summary: `Interaction p = ${intEffect.p.toFixed(3)}. R² change = ${r2Change.toFixed(3)}.`,
+      detail: JSON.stringify({ simpleSlopes: slopes, jnRegions: result.jnRegions }),
       significant: intSig,
-      pValue: result.interactionEffect.p,
-      effectSize: result.rSquaredChange,
+      pValue: intEffect.p,
+      effectSize: r2Change as number | null,
       effectLabel: null,
       theme: null,
     }]
@@ -64,7 +65,7 @@ const ModerationPlugin: AnalysisPlugin = {
       charts: [], findings,
       plainLanguage: this.plainLanguage({ pluginId: 'moderation_analysis', data: { result, xName: xCol.name, wName: wCol.name, yName: yCol.name }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
-      logEntry: { type: 'analysis_run', payload: { pluginId: 'moderation_analysis', interactionP: result.interactionEffect.p } },
+      logEntry: { type: 'analysis_run', payload: { pluginId: 'moderation_analysis', interactionP: intEffect.p } },
     }
   },
 
