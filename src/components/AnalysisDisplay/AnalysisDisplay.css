@@ -162,7 +162,19 @@
 }
 
 /* Assumption warnings */
+.assumption-details {
+  margin-top: 12px;
+}
+
+.assumption-summary {
+  font-size: 12px;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 6px 0;
+}
+
 .assumption-warnings {
+  margin-top: 6px;
   margin-bottom: 12px;
 }
 

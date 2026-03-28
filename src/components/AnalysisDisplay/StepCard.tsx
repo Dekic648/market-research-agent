@@ -41,22 +41,18 @@ export function StepCard({ result, pluginTitle, pluginDesc, stepNumber }: StepCa
         <div className="step-body">
           <PlainLanguageCard text={result.plainLanguage} />
 
-          {metrics.length > 0 && <MetricsRow metrics={metrics} />}
-
-          {/* Assumptions warnings */}
-          {result.assumptions.filter((a) => !a.passed).length > 0 && (
-            <div className="assumption-warnings">
-              {result.assumptions
-                .filter((a) => !a.passed)
-                .map((a, i) => (
-                  <div key={i} className={`assumption-warn assumption-${a.severity}`}>
-                    &#9888; {String(a.message ?? '')}
-                  </div>
-                ))}
+          {/* Charts first — primary visual output */}
+          {result.charts.length > 0 && (
+            <div className="step-charts">
+              {result.charts.map((chart) => (
+                <ChartContainer key={chart.id} chart={chart} />
+              ))}
             </div>
           )}
 
-          {/* Findings */}
+          {metrics.length > 0 && <MetricsRow metrics={metrics} />}
+
+          {/* Findings — text accompanies charts */}
           {result.findings.length > 0 && (
             <div className="step-findings">
               {result.findings.map((f, i) => (
@@ -73,13 +69,22 @@ export function StepCard({ result, pluginTitle, pluginDesc, stepNumber }: StepCa
             </div>
           )}
 
-          {/* Charts */}
-          {result.charts.length > 0 && (
-            <div className="step-charts">
-              {result.charts.map((chart) => (
-                <ChartContainer key={chart.id} chart={chart} />
-              ))}
-            </div>
+          {/* Assumptions — collapsed at bottom */}
+          {result.assumptions.filter((a) => !a.passed).length > 0 && (
+            <details className="assumption-details">
+              <summary className="assumption-summary">
+                {result.assumptions.filter((a) => !a.passed).length} assumption warning(s)
+              </summary>
+              <div className="assumption-warnings">
+                {result.assumptions
+                  .filter((a) => !a.passed)
+                  .map((a, i) => (
+                    <div key={i} className={`assumption-warn assumption-${a.severity}`}>
+                      {String(a.message ?? '')}
+                    </div>
+                  ))}
+              </div>
+            </details>
           )}
         </div>
       )}

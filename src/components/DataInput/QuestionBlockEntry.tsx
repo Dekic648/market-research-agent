@@ -19,7 +19,7 @@ function createEmptyBlock(): QuestionBlock {
   const id = `qb_${++blockCounter}_${Date.now()}`
   return {
     id,
-    label: '',
+    label: `Question ${blockCounter}`,
     questionType: 'rating',
     columns: [],
     role: 'question',
@@ -35,12 +35,10 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
   }, [])
 
   const addSegmentBlock = useCallback(() => {
-    const hasSegment = blocks.some((b) => b.role === 'segment')
-    if (hasSegment) return
-
+    const segCount = blocks.filter((b) => b.role === 'segment').length
     const seg = createEmptyBlock()
     seg.role = 'segment'
-    seg.label = 'Segment'
+    seg.label = segCount === 0 ? 'Segment' : `Segment ${segCount + 1}`
     seg.questionType = 'category'
     setBlocks((prev) => [...prev, seg])
   }, [blocks])
@@ -48,14 +46,6 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
   const updateBlock = useCallback((index: number, updated: QuestionBlock) => {
     setBlocks((prev) => {
       const next = [...prev]
-      // If setting this block as segment, unset any other segment
-      if (updated.role === 'segment') {
-        for (let i = 0; i < next.length; i++) {
-          if (i !== index && next[i].role === 'segment') {
-            next[i] = { ...next[i], role: 'question' }
-          }
-        }
-      }
       next[index] = updated
       return next
     })
@@ -97,17 +87,15 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
         <button className="btn btn-secondary" onClick={addBlock}>
           + Add Question
         </button>
-        {!hasSegment && (
-          <button className="btn btn-secondary" onClick={addSegmentBlock}>
-            + Add Segment
-          </button>
-        )}
+        <button className="btn btn-secondary" onClick={addSegmentBlock}>
+          + Add Segment
+        </button>
       </div>
 
       <div className="qb-footer card">
         <div className="qb-footer-stats">
           <span className="badge badge-purple">{questionCount} question{questionCount !== 1 ? 's' : ''} with data</span>
-          {hasSegment && <span className="badge badge-teal">Segment added</span>}
+          {hasSegment && <span className="badge badge-teal">{blocks.filter(b => b.role === 'segment').length} segment(s)</span>}
         </div>
         <button
           className="btn btn-primary"

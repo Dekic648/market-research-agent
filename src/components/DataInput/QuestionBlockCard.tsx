@@ -63,7 +63,29 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
           declaredScaleRange: block.scaleRange ?? null,
         }))
 
-        onUpdate({ ...block, columns })
+        // Auto-detect scale range from fingerprint
+        let scaleRange = block.scaleRange
+        if (!scaleRange && columns.length > 0) {
+          const fp = columns[0].fingerprint
+          if (fp && fp.numericRatio > 0.8 && fp.min !== null && fp.max !== null && fp.nUnique >= 3 && fp.nUnique <= 11) {
+            scaleRange = [fp.min, fp.max]
+          }
+        }
+
+        // Auto-derive label from column names if label is still default
+        let label = block.label
+        if (!label || /^Question \d+$/.test(label) || label === '') {
+          if (columns.length === 1) {
+            label = columns[0].name
+          } else {
+            // Find common prefix of column names
+            const names = columns.map((c) => c.name)
+            const prefix = commonPrefix(names)
+            label = prefix.length >= 3 ? prefix.replace(/[\s:_-]+$/, '') : names[0]
+          }
+        }
+
+        onUpdate({ ...block, columns, scaleRange, label })
       } catch (err) {
         console.error('Parse error:', err)
       }
@@ -128,11 +150,11 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
               placeholder="Min"
               value={block.scaleRange?.[0] ?? ''}
               onChange={(e) => {
-                const min = e.target.value ? Number(e.target.value) : undefined
-                const max = block.scaleRange?.[1]
+                const min = e.target.value !== '' ? Number(e.target.value) : null
+                const max = block.scaleRange?.[1] ?? null
                 onUpdate({
                   ...block,
-                  scaleRange: min !== undefined && max !== undefined ? [min, max] : undefined,
+                  scaleRange: [min ?? 1, max ?? 5],
                 })
               }}
             />
@@ -143,11 +165,11 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
               placeholder="Max"
               value={block.scaleRange?.[1] ?? ''}
               onChange={(e) => {
-                const max = e.target.value ? Number(e.target.value) : undefined
-                const min = block.scaleRange?.[0]
+                const max = e.target.value !== '' ? Number(e.target.value) : null
+                const min = block.scaleRange?.[0] ?? null
                 onUpdate({
                   ...block,
-                  scaleRange: min !== undefined && max !== undefined ? [min, max] : undefined,
+                  scaleRange: [min ?? 1, max ?? 5],
                 })
               }}
             />
@@ -214,4 +236,17 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
       )}
     </div>
   )
+}
+
+/** Find the longest common prefix of an array of strings */
+function commonPrefix(strings: string[]): string {
+  if (strings.length === 0) return ''
+  let prefix = strings[0]
+  for (let i = 1; i < strings.length; i++) {
+    while (!strings[i].startsWith(prefix)) {
+      prefix = prefix.slice(0, -1)
+      if (prefix.length === 0) return ''
+    }
+  }
+  return prefix
 }
