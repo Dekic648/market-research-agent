@@ -33,6 +33,9 @@ export class HeadlessRunner implements IStepRunner {
   /** Accumulated log entries — caller writes these to AnalysisLog store */
   readonly logEntries: Partial<AnalysisLogEntry>[] = []
 
+  /** True if BH correction was auto-applied after run */
+  fdrAutoApplied = false
+
   onProgress?: (progress: RunProgress) => void
   onViolation?: (violation: AssumptionViolation) => void
 
@@ -165,6 +168,38 @@ export class HeadlessRunner implements IStepRunner {
           },
         })
       }
+    }
+
+    // Auto-apply FDR correction when ≥ 5 significance tests
+    const sigFindings = allFindings.filter((f) => f.pValue !== null && f.pValue !== undefined)
+    if (sigFindings.length >= 5) {
+      // Apply Benjamini-Hochberg to the accumulated findings
+      const m = sigFindings.length
+      const sorted = [...sigFindings].sort((a, b) => (a.pValue ?? 1) - (b.pValue ?? 1))
+      const adjustedMap = new Map<string, number>()
+      let minSoFar = 1
+      for (let i = m - 1; i >= 0; i--) {
+        const rank = i + 1
+        const raw = sorted[i].pValue ?? 1
+        const adjusted = Math.min(minSoFar, (raw * m) / rank)
+        minSoFar = adjusted
+        adjustedMap.set(sorted[i].id, Math.min(1, adjusted))
+      }
+      for (const f of allFindings) {
+        const adj = adjustedMap.get(f.id)
+        if (adj !== undefined) f.adjustedPValue = adj
+      }
+
+      this.logEntries.push({
+        type: 'fdr_correction_applied',
+        userId: this.config.userId,
+        dataFingerprint: this.config.dataFingerprint,
+        dataVersion: this.config.dataVersion,
+        sessionId: this.config.sessionId,
+        payload: { method: 'bh', nTests: m },
+      })
+
+      this.fdrAutoApplied = true
     }
 
     return {

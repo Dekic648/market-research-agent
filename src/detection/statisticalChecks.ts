@@ -655,6 +655,7 @@ export function runStatisticalChecks(input: CheckInput): DetectionFlag[] {
     checkZeroInflated,
     checkPrefixedOrdinal,
     checkConstantColumn,
+    checkNearZeroVariance,
   ]
 
   for (const check of checks) {
@@ -663,6 +664,119 @@ export function runStatisticalChecks(input: CheckInput): DetectionFlag[] {
   }
 
   return flags
+}
+
+// ============================================================
+// 11. Near-zero variance detection
+// ============================================================
+
+/**
+ * Detects columns where the coefficient of variation is < 0.05
+ * (or SD < 0.1 when mean is near zero). These columns produce
+ * degenerate results in correlation and regression.
+ *
+ * Does NOT fire if the column is already caught by checkConstantColumn
+ * (nUnique === 1) to avoid double-flagging.
+ */
+export function checkNearZeroVariance(input: CheckInput): DetectionFlag | null {
+  const { columnId, values } = input
+  if (values.length < 5) return null
+
+  const nums: number[] = []
+  for (const v of values) {
+    if (v === null) continue
+    const n = typeof v === 'number' ? v : parseFloat(String(v))
+    if (!isNaN(n) && isFinite(n)) nums.push(n)
+  }
+
+  if (nums.length < 5) return null
+
+  // Skip if constant (handled by checkConstantColumn)
+  const unique = new Set(nums)
+  if (unique.size <= 1) return null
+
+  const mean = nums.reduce((s, v) => s + v, 0) / nums.length
+  const sd = Math.sqrt(nums.reduce((s, v) => s + (v - mean) * (v - mean), 0) / (nums.length - 1))
+
+  // Edge case: mean is 0 or near 0 → use SD threshold directly
+  let isNearZero = false
+  let cv = 0
+  if (Math.abs(mean) < 0.001) {
+    isNearZero = sd < 0.1
+    cv = 0
+  } else {
+    cv = sd / Math.abs(mean)
+    isNearZero = cv < 0.05
+  }
+
+  if (!isNearZero) return null
+
+  return {
+    id: `nzvar_${columnId}_${Date.now()}`,
+    type: 'near_zero_variance',
+    columnId,
+    severity: 'warning',
+    source: 'statistical',
+    confidence: Math.min(1 - cv * 10, 0.95),
+    message: `This column has near-zero variance (SD = ${sd.toFixed(4)}, CV = ${cv.toFixed(4)}). Results from correlation and regression will be unstable.`,
+    suggestion: 'Consider excluding this column from multivariate analyses, or verify the data is correct.',
+    detail: { cv, sd, mean, nUnique: unique.size },
+    timestamp: Date.now(),
+  }
+}
+
+// ============================================================
+// Dataset-level: Duplicate row detection
+// ============================================================
+
+/**
+ * Detect duplicate rows across all columns in a dataset.
+ * Serializes each row as a JSON string, counts duplicates.
+ * Returns a DetectionFlag if any duplicates found.
+ *
+ * Call this with all columns from PastedData, not per-column.
+ */
+export function checkDuplicateRows(
+  columns: Array<{ id: string; values: (number | string | null)[] }>
+): DetectionFlag | null {
+  if (columns.length === 0) return null
+  const nRows = columns[0].values.length
+  if (nRows < 2) return null
+
+  const rowStrings = new Map<string, number>()
+  let duplicateCount = 0
+
+  for (let r = 0; r < nRows; r++) {
+    const rowKey = columns.map((col) => {
+      const v = col.values[r]
+      return v === null ? '\0' : String(v)
+    }).join('|')
+
+    const count = (rowStrings.get(rowKey) ?? 0) + 1
+    rowStrings.set(rowKey, count)
+    if (count === 2) duplicateCount++ // count each duplicated row set once
+  }
+
+  // Count total duplicate rows (all extra copies)
+  let totalDuplicateRows = 0
+  for (const count of rowStrings.values()) {
+    if (count > 1) totalDuplicateRows += count - 1
+  }
+
+  if (totalDuplicateRows === 0) return null
+
+  return {
+    id: `dupes_${Date.now()}`,
+    type: 'duplicate_rows',
+    columnId: '_dataset',
+    severity: 'critical',
+    source: 'statistical',
+    confidence: 1.0,
+    message: `${totalDuplicateRows} duplicate row(s) detected (${duplicateCount} unique row pattern(s) repeated). Duplicate rows inflate sample size and bias variance estimates.`,
+    suggestion: 'Review and remove duplicate rows before analysis. Common cause: accidental SQL JOINs in data export.',
+    detail: { duplicateCount, totalDuplicateRows, totalRows: nRows },
+    timestamp: Date.now(),
+  }
 }
 
 // ============================================================

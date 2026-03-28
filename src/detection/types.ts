@@ -13,6 +13,8 @@ export type DetectionFlagType =
   | 'zero_inflated'           // high % zeros with positive tail — log(x+1) recommended
   | 'prefixed_ordinal_detected' // categorical values with digit prefix e.g. "0) NonPayer"
   | 'constant_column'         // only 1 unique value — exclude from all analysis
+  | 'duplicate_rows'          // dataset contains duplicate rows — inflates n
+  | 'near_zero_variance'      // column has near-zero variance — unstable in regression/correlation
 
 export type DetectionSeverity = 'info' | 'warning' | 'critical'
 

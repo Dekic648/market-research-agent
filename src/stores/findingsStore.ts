@@ -7,6 +7,7 @@ import type { Finding } from '../types/dataTypes'
 
 interface FindingsStoreState {
   findings: Finding[]
+  fdrApplied: boolean
 
   /** The only way to create a finding */
   add: (finding: Finding) => void
@@ -37,6 +38,7 @@ interface FindingsStoreState {
 
 const initialState = {
   findings: [] as Finding[],
+  fdrApplied: false,
 }
 
 export const useFindingsStore = create<FindingsStoreState>()((set, get) => ({
@@ -118,7 +120,7 @@ export const useFindingsStore = create<FindingsStoreState>()((set, get) => ({
           ...f,
           adjustedPValue: Math.min(1, (f.pValue ?? 1) * m),
         }))
-        return { findings: [...adjusted, ...withoutP] }
+        return { findings: [...adjusted, ...withoutP], fdrApplied: true }
       }
 
       // Benjamini-Hochberg
@@ -142,7 +144,7 @@ export const useFindingsStore = create<FindingsStoreState>()((set, get) => ({
         adjustedPValue: adjustedMap.get(f.id) ?? f.adjustedPValue,
       }))
 
-      return { findings: allFindings }
+      return { findings: allFindings, fdrApplied: true }
     }),
 
   reset: () => set(initialState),

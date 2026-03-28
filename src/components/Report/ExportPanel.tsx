@@ -1,6 +1,6 @@
 /**
  * ExportPanel — trigger report export in various formats.
- * Also provides FDR correction before export.
+ * FDR correction is now auto-applied by HeadlessRunner — no user prompt needed.
  */
 
 import { useState } from 'react'
@@ -17,17 +17,11 @@ interface ExportPanelProps {
 
 export function ExportPanel({ schema }: ExportPanelProps) {
   const findings = useFindingsStore((s) => s.findings)
-  const applyFDR = useFindingsStore((s) => s.applyFDRCorrection)
+  const fdrApplied = useFindingsStore((s) => s.fdrApplied)
   const chartConfigs = useChartStore((s) => s.configs)
-  const [fdrApplied, setFdrApplied] = useState(false)
   const [exported, setExported] = useState(false)
 
   const sigFindings = findings.filter((f) => f.pValue !== null)
-
-  const handleFDR = (method: 'bonferroni' | 'bh') => {
-    applyFDR(method)
-    setFdrApplied(true)
-  }
 
   const handleExportJSON = () => {
     const findingsMap = new Map<string, Finding>()
@@ -63,26 +57,11 @@ export function ExportPanel({ schema }: ExportPanelProps) {
     <div className="export-panel">
       <h3>Export Report</h3>
 
-      {/* FDR Correction */}
-      {sigFindings.length >= 5 && !fdrApplied && (
-        <div className="fdr-prompt">
-          <p>
-            {sigFindings.length} significance tests detected.
-            Apply multiple comparison correction before exporting?
-          </p>
-          <div className="fdr-buttons">
-            <button className="btn btn-secondary" onClick={() => handleFDR('bh')}>
-              Benjamini-Hochberg (recommended)
-            </button>
-            <button className="btn btn-secondary" onClick={() => handleFDR('bonferroni')}>
-              Bonferroni (conservative)
-            </button>
-          </div>
+      {/* FDR status — read-only indicator */}
+      {fdrApplied && sigFindings.length > 0 && (
+        <div className="fdr-applied badge badge-teal">
+          BH correction applied to {sigFindings.length} tests
         </div>
-      )}
-
-      {fdrApplied && (
-        <div className="fdr-applied badge badge-teal">FDR correction applied</div>
       )}
 
       {/* Export buttons */}
