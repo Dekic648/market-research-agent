@@ -155,6 +155,33 @@ describe('CapabilityMatcher', () => {
     const caps = CapabilityMatcher.resolve(node)
     expect(caps.has('categorical')).toBe(true)
   })
+
+  it('prefixed_ordinal emits categorical + ordinal + segment', () => {
+    const col = makeCol('seg', 'Player Type', 'category', ['0) NonPayer', '1) ExPayer', '2) Minnow'])
+    col.subtype = 'prefixed_ordinal'
+    const caps = CapabilityMatcher.resolveFromColumns([col])
+    expect(caps.has('categorical')).toBe(true)
+    expect(caps.has('ordinal')).toBe(true)
+    expect(caps.has('segment')).toBe(true)
+  })
+
+  it('geo emits categorical + segment, NOT ordinal', () => {
+    const col = makeCol('geo', 'Country', 'category', ['US', 'UK', 'DE'])
+    col.subtype = 'geo'
+    const caps = CapabilityMatcher.resolveFromColumns([col])
+    expect(caps.has('categorical')).toBe(true)
+    expect(caps.has('segment')).toBe(true)
+    expect(caps.has('ordinal')).toBe(false)
+  })
+
+  it('constant column emits nothing', () => {
+    const col = makeCol('c', 'Const', 'category', ['US', 'US', 'US'])
+    col.subtype = 'constant'
+    const caps = CapabilityMatcher.resolveFromColumns([col])
+    expect(caps.has('categorical')).toBe(false)
+    expect(caps.has('ordinal')).toBe(false)
+    expect(caps.has('segment')).toBe(false)
+  })
 })
 
 // ============================================================

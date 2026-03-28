@@ -19,6 +19,19 @@ export type QuestionType =
   | 'multi_assigned'  // pipe/comma-separated codes — explodes to binary matrix
   | 'weight'          // respondent weight column
 
+export type BehavioralSubtype =
+  | 'proportion'      // range [0,1], continuous
+  | 'spend'           // zero-inflated, right-skewed
+  | 'count'           // non-negative integers
+  | 'ordinal_rank'    // integers with natural order, small range (e.g. 1-10)
+  | 'metric'          // general continuous
+
+export type CategorySubtype =
+  | 'nominal'         // pure categorical, no order
+  | 'prefixed_ordinal' // strings like "0) NonPayer", "3) Dolphin"
+  | 'geo'             // country, region, city
+  | 'constant'        // nUnique = 1 — excluded from analysis
+
 export interface ColumnFingerprint {
   columnId: string
   hash: string
@@ -75,6 +88,7 @@ export interface ColumnDefinition {
   id: string
   name: string
   type: QuestionType
+  subtype?: BehavioralSubtype | CategorySubtype  // refined classification
   nRows: number
   nMissing: number
   rawValues: (number | string | null)[]     // immutable after parse — NEVER written to after adapter

@@ -12,6 +12,8 @@ import {
   checkCollapsedCategories,
   checkSkewedDistribution,
   checkZeroInflated,
+  checkPrefixedOrdinal,
+  checkConstantColumn,
   runStatisticalChecks,
 } from '../../src/detection/statisticalChecks'
 import type { CheckInput } from '../../src/detection/types'
@@ -428,6 +430,103 @@ describe('checkZeroInflated', () => {
       sensitivity: 'anonymous',
     })
     expect(flag).toBeNull()
+  })
+})
+
+// ============================================================
+// 9. Prefixed ordinal detection
+// ============================================================
+
+describe('checkPrefixedOrdinal', () => {
+  it('flags values with digit+) prefix pattern', () => {
+    const flag = checkPrefixedOrdinal({
+      columnId: 'seg',
+      columnName: 'Player Type',
+      values: ['0) NonPayer', '1) ExPayer', '2) Minnow', '3) Dolphin', '4) Whale',
+               '0) NonPayer', '1) ExPayer', '2) Minnow', '3) Dolphin', '0) NonPayer'],
+    })
+
+    expect(flag).not.toBeNull()
+    expect(flag!.type).toBe('prefixed_ordinal_detected')
+    expect(flag!.severity).toBe('info')
+    expect((flag!.detail as any).actionType).toBe('reclassify_column')
+    expect((flag!.detail as any).params.subtype).toBe('prefixed_ordinal')
+    expect((flag!.detail as any).examples.length).toBeGreaterThan(0)
+  })
+
+  it('does not flag regular text categories', () => {
+    const flag = checkPrefixedOrdinal({
+      columnId: 'seg',
+      columnName: 'Region',
+      values: ['North', 'South', 'East', 'West', 'North', 'South', 'East', 'West', 'North', 'South'],
+    })
+    expect(flag).toBeNull()
+  })
+
+  it('does not flag numeric columns', () => {
+    const flag = checkPrefixedOrdinal({
+      columnId: 'score',
+      columnName: 'Score',
+      values: [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+    })
+    expect(flag).toBeNull()
+  })
+
+  it('does not flag when < 70% match', () => {
+    const flag = checkPrefixedOrdinal({
+      columnId: 'mix',
+      columnName: 'Mixed',
+      values: ['0) A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+    })
+    expect(flag).toBeNull()
+  })
+})
+
+// ============================================================
+// 10. Constant column detection
+// ============================================================
+
+describe('checkConstantColumn', () => {
+  it('flags column with only one unique value', () => {
+    const flag = checkConstantColumn({
+      columnId: 'const',
+      columnName: 'Country',
+      values: ['US', 'US', 'US', 'US', 'US', 'US', 'US', 'US', 'US', 'US'],
+    })
+
+    expect(flag).not.toBeNull()
+    expect(flag!.type).toBe('constant_column')
+    expect(flag!.severity).toBe('warning')
+    expect(flag!.confidence).toBe(1.0)
+    expect((flag!.detail as any).soleValue).toBe('US')
+  })
+
+  it('flags numeric constant', () => {
+    const flag = checkConstantColumn({
+      columnId: 'const',
+      columnName: 'Version',
+      values: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    })
+    expect(flag).not.toBeNull()
+    expect((flag!.detail as any).soleValue).toBe(1)
+  })
+
+  it('does not flag column with 2+ unique values', () => {
+    const flag = checkConstantColumn({
+      columnId: 'var',
+      columnName: 'Group',
+      values: ['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B'],
+    })
+    expect(flag).toBeNull()
+  })
+
+  it('ignores nulls — flags if only one non-null value', () => {
+    const flag = checkConstantColumn({
+      columnId: 'const',
+      columnName: 'Status',
+      values: ['Active', null, 'Active', null, 'Active', null, 'Active', 'Active', 'Active', 'Active'],
+    })
+    expect(flag).not.toBeNull()
   })
 })
 

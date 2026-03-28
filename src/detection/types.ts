@@ -11,6 +11,8 @@ export type DetectionFlagType =
   | 'collapsed_categories'    // fewer unique values than expected for declared scale range
   | 'skewed_distribution'     // heavy right-skew — log transform recommended
   | 'zero_inflated'           // high % zeros with positive tail — log(x+1) recommended
+  | 'prefixed_ordinal_detected' // categorical values with digit prefix e.g. "0) NonPayer"
+  | 'constant_column'         // only 1 unique value — exclude from all analysis
 
 export type DetectionSeverity = 'info' | 'warning' | 'critical'
 

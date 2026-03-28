@@ -513,7 +513,104 @@ export function checkZeroInflated(input: CheckInput): DetectionFlag | null {
 }
 
 // ============================================================
-// Runner — execute all 8 checks on a column
+// 9. Prefixed ordinal detection
+// ============================================================
+
+/**
+ * Detects categorical columns where values are prefixed with ordering
+ * numbers, e.g. "0) NonPayer", "3) Dolphin", "1) ExPayer".
+ *
+ * When confirmed: strip prefix for display, use numeric prefix as sort key.
+ */
+export function checkPrefixedOrdinal(input: CheckInput): DetectionFlag | null {
+  const { columnId, values } = input
+  if (values.length < 3) return null
+
+  const PREFIX_PATTERN = /^\d+\)\s/
+
+  let matchCount = 0
+  let checkedCount = 0
+  const examples: string[] = []
+
+  for (let i = 0; i < Math.min(values.length, 100); i++) {
+    const v = values[i]
+    if (v === null) continue
+    if (typeof v === 'number') continue // skip numeric values
+    const str = String(v).trim()
+    if (str === '') continue
+    checkedCount++
+
+    if (PREFIX_PATTERN.test(str)) {
+      matchCount++
+      if (examples.length < 3) examples.push(str)
+    }
+  }
+
+  if (checkedCount < 3) return null
+  const matchRatio = matchCount / checkedCount
+  if (matchRatio < 0.7) return null
+
+  return {
+    id: `preford_${columnId}_${Date.now()}`,
+    type: 'prefixed_ordinal_detected',
+    columnId,
+    severity: 'info',
+    source: 'statistical',
+    confidence: Math.min(matchRatio, 0.95),
+    message: `Values appear to be prefixed with ordering numbers (e.g. ${examples.map((e) => `'${e}'`).join(', ')}). Extracting numeric prefix for correct sort order in charts and significance tests.`,
+    suggestion: 'Reclassify as prefixed_ordinal. Numeric prefix used as sort key, display label stripped.',
+    detail: {
+      matchRatio,
+      examples,
+      actionType: 'reclassify_column',
+      params: { subtype: 'prefixed_ordinal' },
+    },
+    timestamp: Date.now(),
+  }
+}
+
+// ============================================================
+// 10. Constant column detection
+// ============================================================
+
+/**
+ * Detects columns with only one unique non-null value.
+ * These should be excluded from all analysis — they carry no variance.
+ */
+export function checkConstantColumn(input: CheckInput): DetectionFlag | null {
+  const { columnId, values } = input
+  if (values.length < 3) return null
+
+  const unique = new Set<string | number>()
+  for (const v of values) {
+    if (v === null) continue
+    unique.add(typeof v === 'number' ? v : String(v).trim())
+    if (unique.size > 1) return null // early exit — not constant
+  }
+
+  if (unique.size !== 1) return null
+
+  const soleValue = Array.from(unique)[0]
+
+  return {
+    id: `const_${columnId}_${Date.now()}`,
+    type: 'constant_column',
+    columnId,
+    severity: 'warning',
+    source: 'statistical',
+    confidence: 1.0,
+    message: `Only one unique value ("${soleValue}") — excluded from analysis. A constant variable has no variance and cannot contribute to any statistical test.`,
+    suggestion: 'Exclude this column from analysis.',
+    detail: {
+      soleValue,
+      actionType: 'exclude_column',
+    },
+    timestamp: Date.now(),
+  }
+}
+
+// ============================================================
+// Runner — execute all 10 checks on a column
 // ============================================================
 
 /**
@@ -533,6 +630,8 @@ export function runStatisticalChecks(input: CheckInput): DetectionFlag[] {
     checkCollapsedCategories,
     checkSkewedDistribution,
     checkZeroInflated,
+    checkPrefixedOrdinal,
+    checkConstantColumn,
   ]
 
   for (const check of checks) {

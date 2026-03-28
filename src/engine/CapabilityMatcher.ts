@@ -119,6 +119,9 @@ export const CapabilityMatcher = {
     if (weights) caps.add('weighted')
 
     for (const col of columns) {
+      // Skip constant columns — they have no variance
+      if (col.subtype === 'constant') continue
+
       switch (col.type) {
         case 'rating':
         case 'matrix':
@@ -127,7 +130,16 @@ export const CapabilityMatcher = {
           break
         case 'category':
         case 'radio':
-          caps.add('categorical')
+          if (col.subtype === 'prefixed_ordinal') {
+            caps.add('categorical')
+            caps.add('ordinal')
+            caps.add('segment')
+          } else if (col.subtype === 'geo') {
+            caps.add('categorical')
+            caps.add('segment')
+          } else {
+            caps.add('categorical')
+          }
           break
         case 'checkbox':
           caps.add('categorical')
