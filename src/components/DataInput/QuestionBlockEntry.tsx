@@ -8,7 +8,7 @@
 import { useState, useCallback } from 'react'
 import { QuestionBlockCard } from './QuestionBlockCard'
 import { BulkTaggerTable, getDetectionConfidence } from './BulkTaggerTable'
-import type { QuestionBlock } from '../../types/dataTypes'
+import type { QuestionBlock, ColumnRole } from '../../types/dataTypes'
 import './QuestionBlockEntry.css'
 
 interface QuestionBlockEntryProps {
@@ -21,9 +21,10 @@ function createEmptyBlock(): QuestionBlock {
   return {
     id,
     label: `Question ${blockCounter}`,
+    format: 'rating',
     questionType: 'rating',
     columns: [],
-    role: 'question',
+    role: 'analyze' as ColumnRole,
     confirmed: false,
     pastedAt: Date.now(),
   }
@@ -41,8 +42,19 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
     const seg = createEmptyBlock()
     seg.role = 'segment'
     seg.label = segCount === 0 ? 'Segment' : `Segment ${segCount + 1}`
+    seg.format = 'category'
     seg.questionType = 'category'
     setBlocks((prev) => [...prev, seg])
+  }, [blocks])
+
+  const addBehavioralBlock = useCallback(() => {
+    const behCount = blocks.filter((b) => b.role === 'metric').length
+    const beh = createEmptyBlock()
+    beh.role = 'metric'
+    beh.label = behCount === 0 ? 'Behavioral / CRM Data' : `Behavioral Data ${behCount + 1}`
+    beh.format = 'behavioral'
+    beh.questionType = 'behavioral'
+    setBlocks((prev) => [...prev, beh])
   }, [blocks])
 
   const updateBlock = useCallback((index: number, updated: QuestionBlock) => {
@@ -62,7 +74,9 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
   const allConfirmed = blocksWithData.every((b) => b.confirmed)
   const unconfirmedCount = blocksWithData.filter((b) => !b.confirmed).length
   const hasSegment = blocks.some((b) => b.role === 'segment')
-  const questionCount = blocks.filter((b) => b.role === 'question' && b.columns.length > 0).length
+  const hasBehavioral = blocks.some((b) => b.role === 'metric')
+  const questionCount = blocks.filter((b) => b.role === 'analyze' && b.columns.length > 0).length
+  const behavioralCount = blocks.filter((b) => b.role === 'metric' && b.columns.length > 0).length
 
   // Bulk mode: 8+ columns with data
   const isBulkMode = blocksWithData.length >= 8
@@ -99,9 +113,11 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
         <>
           <div className="qb-list">
             {blocks.map((block, i) => {
-              const displayIndex = block.role === 'question'
-                ? blocks.filter((b, j) => j <= i && b.role === 'question').length
-                : undefined
+              const displayIndex = block.role === 'analyze'
+                ? blocks.filter((b, j) => j <= i && b.role === 'analyze').length
+                : block.role === 'metric'
+                  ? blocks.filter((b, j) => j <= i && b.role === 'metric').length
+                  : undefined
               return (
                 <QuestionBlockCard
                   key={block.id}
@@ -121,6 +137,9 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
             <button className="btn btn-secondary" onClick={addSegmentBlock}>
               + Add Segment
             </button>
+            <button className="btn btn-secondary" onClick={addBehavioralBlock}>
+              + Add Behavioral Data
+            </button>
           </div>
         </>
       )}
@@ -129,6 +148,7 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
         <div className="qb-footer-stats">
           <span className="badge badge-purple">{questionCount} question{questionCount !== 1 ? 's' : ''} with data</span>
           {hasSegment && <span className="badge badge-teal">{blocks.filter(b => b.role === 'segment').length} segment(s)</span>}
+          {hasBehavioral && <span className="badge badge-purple">{behavioralCount} behavioral</span>}
         </div>
         {unconfirmedCount > 0 && hasData && (
           <span className="badge badge-amber">{unconfirmedCount} unconfirmed</span>

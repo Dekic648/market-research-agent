@@ -33,6 +33,15 @@ interface RegressionResultData {
   n: number
   nPredictors: number
   cv?: KFoldCVResult
+  logTransformed?: boolean
+  outcomeSkewness?: number
+}
+
+const SPEND_KEYWORDS = ['revenue', 'spend', 'payment', 'purchase', 'gross', 'ltv', 'arpu']
+
+function isSpendColumn(name: string): boolean {
+  const lower = name.toLowerCase()
+  return SPEND_KEYWORDS.some((kw) => lower.includes(kw))
 }
 
 function standardize(arr: number[]): number[] {
@@ -100,11 +109,22 @@ const RegressionPlugin: AnalysisPlugin = {
       if (!isNaN(yRaw[i]) && xsRaw.every((x) => !isNaN(x[i]))) valid.push(i)
     }
 
-    const y = valid.map((i) => yRaw[i])
+    let y = valid.map((i) => yRaw[i])
     const xs = xsRaw.map((x) => valid.map((i) => x[i]))
 
+    // Check outcome skewness and apply log1p for spend columns
     // @ts-ignore
-    // TODO: add weights support to linearRegression()
+    const outcomeSkewness: number = y.length >= 3 ? (StatsEngine._helpers.skewness(y) as number) : 0
+    const yMin = Math.min(...y)
+    const shouldLogTransform = Math.abs(outcomeSkewness) > 2 && yMin >= 0 && isSpendColumn(outcome.name)
+    let logTransformed = false
+
+    if (shouldLogTransform) {
+      y = y.map((v) => Math.log1p(v))
+      logTransformed = true
+    }
+
+    // @ts-ignore — weights support not yet implemented
     const regRaw = StatsEngine.linearRegression(y, xs)
     if (regRaw.error) throw new Error(regRaw.error)
     const reg = regRaw as { coefficients: number[]; se: number[]; tStats: number[]; pValues: number[]; R2: number; adjR2: number; F: number; fP: number; RMSE: number; durbinWatson: number; residuals: number[] }
@@ -132,6 +152,8 @@ const RegressionPlugin: AnalysisPlugin = {
       R2: reg.R2, adjR2: reg.adjR2, F: reg.F, fP: reg.fP,
       coefficients, RMSE: reg.RMSE, durbinWatson: reg.durbinWatson,
       n: y.length, nPredictors: predictors.length,
+      logTransformed,
+      outcomeSkewness,
     }
 
     const sigPredictors = coefficients.filter((c) => c.name !== 'intercept' && c.p < 0.05)
@@ -170,6 +192,25 @@ const RegressionPlugin: AnalysisPlugin = {
       })
     }
 
+    // Skewness warning
+    if (Math.abs(outcomeSkewness) > 2) {
+      if (logTransformed) {
+        findingFlags.push({
+          type: 'log_transform_applied',
+          severity: 'info',
+          detail: { skewness: outcomeSkewness, method: 'log1p' },
+          message: `Outcome variable is heavily skewed (skewness = ${outcomeSkewness.toFixed(1)}). Log transformation applied (log1p). Coefficients represent effects on log-${outcome.name}. Exponentiate for multiplicative interpretation.`,
+        })
+      } else {
+        findingFlags.push({
+          type: 'skewed_outcome',
+          severity: 'warning',
+          detail: { skewness: outcomeSkewness },
+          message: `Outcome variable is heavily skewed (skewness = ${outcomeSkewness.toFixed(1)}). Consider log-transforming before regression for more reliable estimates. Results shown on raw values.`,
+        })
+      }
+    }
+
     if (cooks.influentialCount > 0) {
       const severity = cooks.influentialCount / y.length > 0.05 ? 'warning' as const : 'info' as const
       findingFlags.push({
@@ -184,10 +225,17 @@ const RegressionPlugin: AnalysisPlugin = {
       })
     }
 
+    const topSigPredictor = sigPredictors.sort((a, b) => Math.abs(b.beta) - Math.abs(a.beta))[0]
+    const r2Pct = (reg.R2 * 100).toFixed(0)
+    const summaryLanguage = topSigPredictor
+      ? `${topSigPredictor.name} is the strongest predictor of ${outcome.name} — it alone accounts for ${r2Pct}% of the variation.`
+      : `No single factor stands out as a clear predictor of ${outcome.name} — the model explains ${r2Pct}% of the variation.`
+
     const findings = [{
       type: 'regression',
       title: `R² = ${reg.R2.toFixed(3)} — ${sigPredictors.length} significant predictor(s)`,
       summary: `Model ${reg.fP < 0.05 ? 'is significant' : 'is not significant'} (F = ${reg.F.toFixed(2)}, p = ${reg.fP < 0.001 ? '<.001' : reg.fP.toFixed(3)}). ${sigPredictors.map((c) => `${c.name} (β=${c.beta.toFixed(3)})`).join(', ') || 'No significant predictors.'}`,
+      summaryLanguage,
       detail: JSON.stringify(coefficients),
       significant: reg.fP < 0.05,
       pValue: reg.fP,
@@ -222,6 +270,7 @@ const RegressionPlugin: AnalysisPlugin = {
     const sigPredictors = predictors.filter((c) => c.p < 0.05).sort((a, b) => Math.abs(b.beta) - Math.abs(a.beta))
     const r2Pct = (r.R2 * 100).toFixed(0)
     const outcomeName = (res.data as any).outcomeName ?? 'the outcome'
+    const logNote = r.logTransformed ? ' (on log scale)' : ''
 
     let cvNote = ''
     if (r.cv) {
@@ -234,13 +283,13 @@ const RegressionPlugin: AnalysisPlugin = {
     }
 
     if (sigPredictors.length === 0) {
-      return `The model explains ${r2Pct}% of the variation in ${outcomeName}, but no individual predictor reaches significance.${cvNote}`
+      return `The model explains ${r2Pct}%${logNote} of the variation in ${outcomeName}, but no individual predictor reaches significance.${cvNote}`
     }
     const top = sigPredictors[0]
     if (r.cv && !r.cv.overfit) {
-      return `${top.name} is the strongest predictor of ${outcomeName} (beta = ${top.beta.toFixed(2)}, p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}). The model explains ${r2Pct}% of the variation${cvNote}`
+      return `${top.name} is the strongest predictor of ${outcomeName} (beta = ${top.beta.toFixed(2)}, p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}). The model explains ${r2Pct}%${logNote} of the variation${cvNote}`
     }
-    return `${top.name} is the strongest predictor of ${outcomeName} (beta = ${top.beta.toFixed(2)}, p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}). The model explains ${r2Pct}% of the variation.${cvNote}`
+    return `${top.name} is the strongest predictor of ${outcomeName} (beta = ${top.beta.toFixed(2)}, p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}). The model explains ${r2Pct}%${logNote} of the variation.${cvNote}`
   },
 }
 

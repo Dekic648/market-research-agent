@@ -54,6 +54,9 @@ const MediationPlugin: AnalysisPlugin = {
         ? `${mCol.name} mediates ${xCol.name} → ${yCol.name} (${propPct.toFixed(0)}%)`
         : `${mCol.name} does not mediate ${xCol.name} → ${yCol.name}`,
       summary: `Indirect effect = ${indirectEff.toFixed(3)}. Bootstrap 95% CI: [${result.bootstrapCI?.lower?.toFixed(3) ?? '?'}, ${result.bootstrapCI?.upper?.toFixed(3) ?? '?'}]. Sobel p = ${sobelP.toFixed(3)}.`,
+      summaryLanguage: ciExcludesZero
+        ? `${mCol.name} partially explains why ${xCol.name} predicts ${yCol.name} — ${propPct.toFixed(0)}% of the effect runs through ${mCol.name}.`
+        : `${mCol.name} does not explain the link between ${xCol.name} and ${yCol.name}.`,
       detail: JSON.stringify({ pathA: result.pathA, pathB: result.pathB, pathC: result.pathC, pathCprime: result.pathCprime }),
       significant: ciExcludesZero,
       pValue: sobelP as number | null,

@@ -155,10 +155,16 @@ const DriverPlugin: AnalysisPlugin = {
       })
     }
 
+    const driverR2Pct = (result.R2 * 100).toFixed(0)
+    const driverSummaryLanguage = topDriver
+      ? `${topDriver.name} is the strongest predictor of ${outcome.name} — it alone accounts for ${(topDriver.importance * 100).toFixed(0)}% of the variation.`
+      : `No single factor stands out as a clear driver of ${outcome.name}.`
+
     const findings = [{
       type: 'driver',
       title: `Top driver: ${topDriver?.name} (${(topDriver?.importance * 100).toFixed(1)}% relative importance)`,
       summary: `R² = ${result.R2.toFixed(3)}. ${result.predictors.filter((p) => p.p < 0.05).length} of ${result.predictors.length} drivers are significant.`,
+      summaryLanguage: driverSummaryLanguage,
       detail: JSON.stringify(result.predictors.slice(0, 5)),
       significant: (regRaw.fP ?? 1) < 0.05,
       pValue: regRaw.fP ?? null,

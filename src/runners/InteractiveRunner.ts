@@ -124,6 +124,7 @@ export class InteractiveRunner implements IStepRunner {
             createdAt: Date.now(),
             dataVersion: this.config.dataVersion,
             dataFingerprint: this.config.dataFingerprint,
+            summaryLanguage: fi.summaryLanguage || fi.summary.split('. ')[0] + '.',
           })
         }
 

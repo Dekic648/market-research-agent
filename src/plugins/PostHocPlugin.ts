@@ -170,12 +170,21 @@ const PostHocPlugin: AnalysisPlugin = {
     const findings = results.flatMap((ph) => {
       const sigPairs = ph.pairwise.filter((pw) => pw.significant)
       if (sigPairs.length === 0) return []
+      const widestPair = sigPairs.reduce((best, pw) => {
+        const idxA = ph.groupLabels.indexOf(pw.groupA)
+        const idxB = ph.groupLabels.indexOf(pw.groupB)
+        const gap = Math.abs((idxA >= 0 ? ph.groupMeans[idxA] : 0) - (idxB >= 0 ? ph.groupMeans[idxB] : 0))
+        return gap > best.gap ? { pw, gap } : best
+      }, { pw: sigPairs[0], gap: 0 })
+      const summaryLanguage = `${widestPair.pw.groupA} and ${widestPair.pw.groupB} differ the most on ${ph.columnName} — ${widestPair.gap.toFixed(1)}-point gap.`
+
       return [{
         type: 'posthoc',
         title: `${ph.columnName} — ${sigPairs.length} significant pairwise difference(s)`,
         summary: sigPairs.map((pw) =>
           `"${pw.groupA}" vs "${pw.groupB}": p=${pw.pBonferroni < 0.001 ? '<.001' : pw.pBonferroni.toFixed(3)} (r=${pw.r.toFixed(3)})`
         ).join('; '),
+        summaryLanguage,
         detail: JSON.stringify(sigPairs),
         significant: true,
         pValue: Math.min(...sigPairs.map((pw) => pw.pBonferroni)),

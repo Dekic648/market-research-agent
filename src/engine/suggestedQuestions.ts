@@ -49,12 +49,12 @@ export function generateSuggestedQuestions(
   const timestampCols: ColumnDefinition[] = []
 
   for (const block of confirmedBlocks) {
-    if (block.role !== 'question') continue
+    if (block.role !== 'analyze') continue
     for (const col of block.columns) {
-      if (col.type === 'behavioral') behavioralCols.push(col)
-      else if (col.type === 'category' || col.type === 'radio') categoryCols.push(col)
-      else if (col.type === 'rating' || col.type === 'matrix') ratingCols.push(col)
-      else if (col.type === 'timestamped') timestampCols.push(col)
+      if (col.format === 'behavioral') behavioralCols.push(col)
+      else if (col.format === 'category' || col.format === 'radio') categoryCols.push(col)
+      else if (col.format === 'rating' || col.format === 'matrix') ratingCols.push(col)
+      else if (col.format === 'timestamped') timestampCols.push(col)
     }
   }
 

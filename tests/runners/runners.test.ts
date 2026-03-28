@@ -20,11 +20,19 @@ import '../../src/plugins/PostHocPlugin'
 // Helpers
 // ============================================================
 
-function makeCol(id: string, name: string, type: ColumnDefinition['type'], values: (number | string | null)[]): ColumnDefinition {
+const statTypeMap: Record<string, string> = {
+  rating: 'ordinal', matrix: 'ordinal', behavioral: 'continuous',
+  category: 'categorical', radio: 'categorical', checkbox: 'binary',
+  multi_response: 'multi_response', verbatim: 'text', timestamped: 'temporal', weight: 'ordinal',
+}
+
+function makeCol(id: string, name: string, type: ColumnDefinition['format'], values: (number | string | null)[]): ColumnDefinition {
+  const colStatType = (statTypeMap[type] ?? 'ordinal') as any
   return {
-    id, name, type,
+    id, name, format: type, type, statisticalType: colStatType, role: 'analyze',
     nRows: values.length,
     nMissing: values.filter((v) => v === null).length,
+    nullMeaning: 'missing',
     rawValues: values, fingerprint: null, semanticDetectionCache: null,
     transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
   }
@@ -71,10 +79,13 @@ describe('InteractiveRunner', () => {
   it('runAll executes plugins in sequence', async () => {
     const runner = new InteractiveRunner({ data: testData, ...baseConfig })
 
+    const segColNode = makeCol('seg', 'Segment', 'category', segmentValues)
+    segColNode.role = 'segment'
     const node: DatasetNode = {
       id: 'n1', label: 'Test',
       parsedData: {
         groups: [{
+          format: 'rating',
           questionType: 'rating',
           columns: [
             makeCol('q1', 'Quality', 'rating', ratingValues),
@@ -82,7 +93,7 @@ describe('InteractiveRunner', () => {
           ],
           label: 'Test',
         }],
-        segments: makeCol('seg', 'Segment', 'category', segmentValues),
+        segments: segColNode,
       },
       rowCount: 40, weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
     }

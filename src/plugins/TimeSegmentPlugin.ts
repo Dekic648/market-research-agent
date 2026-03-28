@@ -108,6 +108,9 @@ const TimeSegmentPlugin: AnalysisPlugin = {
       type: 'time_segment_comparison',
       title: `${valCol.name} — ${kw.p < 0.05 ? 'significant' : 'no significant'} difference across ${granularity} periods`,
       summary: `Highest: ${grouped.periods[highIdx]} (mean ${periodMeans[highIdx].toFixed(2)}). Lowest: ${grouped.periods[lowIdx]} (mean ${periodMeans[lowIdx].toFixed(2)}).`,
+      summaryLanguage: kw.p < 0.05
+        ? `${valCol.name} differs across time periods — ${grouped.periods[highIdx]} shows the highest levels.`
+        : `${valCol.name} does not differ meaningfully across time periods.`,
       detail: JSON.stringify({ H: kw.H, p: kw.p, df: kw.df, epsilonSquared: epsSq }),
       significant: kw.p < 0.05,
       pValue: kw.p,

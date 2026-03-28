@@ -5,18 +5,29 @@ import { describe, it, expect } from 'vitest'
 import { buildDataSummary } from '../../src/report/schema/dataSummary'
 import type { QuestionBlock } from '../../src/types/dataTypes'
 
+const statTypeMap: Record<string, string> = {
+  rating: 'ordinal', matrix: 'ordinal', behavioral: 'continuous',
+  category: 'categorical', radio: 'categorical', checkbox: 'binary',
+  multi_response: 'multi_response', verbatim: 'text', timestamped: 'temporal', weight: 'ordinal',
+}
+
 function makeBlock(
-  type: QuestionBlock['questionType'],
+  type: QuestionBlock['format'],
   cols: Array<{ name: string; rawValues?: (number | string | null)[] }>
 ): QuestionBlock {
+  const colStatType = (statTypeMap[type] ?? 'ordinal') as any
   return {
     id: `b_${type}_${Math.random().toString(36).slice(2, 5)}`,
     label: type,
+    format: type,
     questionType: type,
     columns: cols.map((c, i) => ({
       id: `c_${i}_${Math.random().toString(36).slice(2, 5)}`,
       name: c.name,
+      format: type,
       type,
+      statisticalType: colStatType,
+      role: 'analyze' as const,
       nRows: (c.rawValues ?? [1, 2, 3]).length,
       nMissing: 0,
       nullMeaning: 'missing' as const,
@@ -27,7 +38,7 @@ function makeBlock(
       sensitivity: 'anonymous' as const,
       declaredScaleRange: null,
     })),
-    role: 'question',
+    role: 'analyze',
     confirmed: true,
     pastedAt: Date.now(),
   }

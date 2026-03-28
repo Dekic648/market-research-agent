@@ -99,9 +99,9 @@ export function PrepWorkspace({ node, detectionFlags, onReadyToAnalyze }: PrepWo
   const pseudoBlocks: import('../../types/dataTypes').QuestionBlock[] = node.parsedData.groups.map((g, i) => ({
     id: `group_${i}`,
     label: g.label,
-    questionType: g.questionType,
+    format: g.format,
     columns: g.columns,
-    role: 'question' as const,
+    role: 'analyze' as const,
     confirmed: true,
     pastedAt: 0,
     scaleRange: g.scaleRange,

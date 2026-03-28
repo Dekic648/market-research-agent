@@ -31,8 +31,11 @@ for (const def of SECTION_DEFS) {
 
 /** Map from pluginId to section key */
 export const METHOD_GROUPS: Record<string, string> = {
+  descriptives_summary: 'distributions',
+  descriptives: 'distributions',
   frequency: 'distributions',
   cronbach: 'reliability',
+  anova_oneway: 'group_comparisons',
   kw_significance: 'group_comparisons',
   posthoc: 'group_comparisons',
   crosstab: 'group_comparisons',
@@ -44,6 +47,7 @@ export const METHOD_GROUPS: Record<string, string> = {
   time_segment_comparison: 'temporal',
   regression: 'drivers',
   driver_analysis: 'drivers',
+  logistic_regression: 'drivers',
   ordinal_regression: 'drivers',
   mediation: 'advanced',
   moderation_analysis: 'advanced',
@@ -53,9 +57,11 @@ export const METHOD_GROUPS: Record<string, string> = {
 
 /** Plugin ordering within a section — lower runs first, display first */
 export const PLUGIN_ORDER_WITHIN_SECTION: Record<string, number> = {
+  descriptives: 0,
   frequency: 1,
   crosstab: 2,
   segment_profile: 3,
+  anova_oneway: 3.5,
   kw_significance: 4,
   posthoc: 5,
   correlation: 1,
@@ -67,7 +73,8 @@ export const PLUGIN_ORDER_WITHIN_SECTION: Record<string, number> = {
   time_segment_comparison: 3,
   regression: 1,
   driver_analysis: 2,
-  ordinal_regression: 3,
+  logistic_regression: 3,
+  ordinal_regression: 4,
   mediation: 1,
   moderation_analysis: 2,
   power_analysis: 3,

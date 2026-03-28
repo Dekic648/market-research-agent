@@ -53,6 +53,9 @@ const PowerAnalysisPlugin: AnalysisPlugin = {
         ? `Required n = ${result.requiredN} per group`
         : `Achieved power = ${(result.achievedPower * 100).toFixed(1)}%`,
       summary: result.interpretation,
+      summaryLanguage: result.requiredN !== null
+        ? `You need ${result.requiredN} respondents to detect a ${result.effectSizeLabel ?? 'medium'} effect with ${((result.power ?? 0.8) * 100).toFixed(0)}% power.`
+        : `With ${result.n ?? 'the current'} respondents, this study has ${(result.achievedPower * 100).toFixed(0)}% power to detect a ${result.effectSizeLabel ?? 'medium'} effect.`,
       detail: JSON.stringify(result),
       significant: false,
       pValue: null,

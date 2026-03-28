@@ -84,6 +84,8 @@ export interface FindingInput {
   effectLabel: string | null
   theme: string | null
   flags?: FindingFlag[]
+  /** Punchy 1-2 sentence summary for TLDR. Falls back to first sentence of summary if not set. */
+  summaryLanguage?: string
 }
 
 export interface AssumptionCheck {

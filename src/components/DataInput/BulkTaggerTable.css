@@ -174,3 +174,34 @@
   display: flex;
   gap: 8px;
 }
+
+/* Role toggle for behavioral blocks */
+.bulk-col-role {
+  text-align: center;
+  width: 90px;
+}
+
+.bulk-role-toggle {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+
+.bulk-role-metric {
+  background: var(--purple-bg);
+  color: var(--purple-text);
+  border-color: var(--purple-text);
+}
+
+.bulk-role-dimension {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.bulk-role-na {
+  color: var(--text-faint);
+  font-size: 11px;
+}

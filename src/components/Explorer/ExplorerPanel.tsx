@@ -185,6 +185,7 @@ export function ExplorerPanel({ blocks }: ExplorerPanelProps) {
         id: `suggestion_${sq.pluginId}_${Date.now()}_${idx}`,
         stepId: sq.pluginId, ...fi, adjustedPValue: null, suppressed: false,
         priority: idx, createdAt: Date.now(), dataVersion: 1, dataFingerprint: 'suggestion',
+        summaryLanguage: fi.summaryLanguage || fi.summary.split('. ')[0] + '.',
       }))
       setResults((prev) => [{ id: `res_${Date.now()}`, plugin, result: stepResult, findings, pinned: new Set() }, ...prev])
     } catch (err) {
@@ -234,6 +235,7 @@ export function ExplorerPanel({ blocks }: ExplorerPanelProps) {
         suppressed: false,
         priority: idx,
         createdAt: Date.now(),
+        summaryLanguage: fi.summaryLanguage || fi.summary.split('. ')[0] + '.',
         dataVersion: 1,
         dataFingerprint: 'explorer',
       }))
@@ -327,7 +329,7 @@ export function ExplorerPanel({ blocks }: ExplorerPanelProps) {
           </div>
 
           {/* Question columns */}
-          {blocks.filter((b) => b.confirmed && b.role === 'question').map((block) => (
+          {blocks.filter((b) => b.confirmed && b.role === 'analyze').map((block) => (
             <div key={block.id} className="picker-group">
               <div className="picker-group-label">{block.label || block.id}</div>
               {block.columns.map((col) => (
@@ -339,7 +341,7 @@ export function ExplorerPanel({ blocks }: ExplorerPanelProps) {
                   />
                   <span className="picker-col-name">{col.name}</span>
                   <span className="picker-col-type">
-                    {TYPE_DESCRIPTIONS[col.type]?.label ?? col.type}
+                    {TYPE_DESCRIPTIONS[col.format]?.label ?? col.format}
                   </span>
                 </label>
               ))}

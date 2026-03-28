@@ -47,6 +47,7 @@ interface FindingCardProps {
   subgroupContext?: SubgroupContext | null
   cvR2?: number | null
   weightedBy?: string
+  crossType?: boolean
   onSuppress?: () => void
 }
 
@@ -76,7 +77,7 @@ function extractKeyMetrics(props: FindingCardProps): KeyMetric[] {
 }
 
 export function FindingCard({
-  title, summary, significant, pValue, effectSize, effectLabel, flags, verificationResults, subgroupContext, weightedBy, onSuppress,
+  title, summary, significant, pValue, effectSize, effectLabel, flags, verificationResults, subgroupContext, weightedBy, crossType, onSuppress,
 }: FindingCardProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const keyMetrics = extractKeyMetrics({ title, summary, significant, pValue, effectSize, effectLabel })
@@ -94,6 +95,13 @@ export function FindingCard({
       {weightedBy && (
         <div className="finding-weighted-badge">
           Weighted by {weightedBy}
+        </div>
+      )}
+
+      {/* Cross-type badge */}
+      {crossType && (
+        <div className="finding-crosstype-badge">
+          Survey × Behavioral
         </div>
       )}
 

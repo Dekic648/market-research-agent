@@ -107,10 +107,12 @@ const ReliabilityPlugin: AnalysisPlugin = {
 
     const charts = [buildItemDiagnosticChart(result)]
 
+    const blockLabel = data.columns.map((c) => c.name).join(', ')
     const findings = [{
       type: 'reliability',
       title: `Cronbach's α = ${ca.alpha.toFixed(3)} (${result.level})`,
       summary: `${ca.k} items, n = ${ca.n}. ${weakItems.length > 0 ? `Weak items (r < .3): ${weakItems.join(', ')}.` : 'All items adequate.'}`,
+      summaryLanguage: `The ${blockLabel} scale holds together well (${ca.k} items, ${result.level} consistency).`,
       detail: JSON.stringify({ alphaIfDeleted: ca.alphaIfDeleted }),
       significant: ca.alpha >= 0.7,
       pValue: null,

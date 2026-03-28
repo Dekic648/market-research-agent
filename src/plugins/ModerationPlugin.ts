@@ -45,12 +45,19 @@ const ModerationPlugin: AnalysisPlugin = {
     const r2Change = result.rSquaredChange ?? 0
     const intSig = intEffect.significant ?? false
 
+    const lowSlopeAbs = Math.abs(slopes.lowMod?.slope ?? 0)
+    const highSlopeAbs = Math.abs(slopes.highMod?.slope ?? 0)
+    const strongerLevel = highSlopeAbs >= lowSlopeAbs ? 'high' : 'low'
+
     const findings = [{
       type: 'moderation',
       title: intSig
         ? `${wCol.name} moderates ${xCol.name} → ${yCol.name}`
         : `${wCol.name} does not moderate ${xCol.name} → ${yCol.name}`,
       summary: `Interaction p = ${intEffect.p.toFixed(3)}. R² change = ${r2Change.toFixed(3)}.`,
+      summaryLanguage: intSig
+        ? `The effect of ${xCol.name} on ${yCol.name} depends on ${wCol.name} — stronger when ${wCol.name} is ${strongerLevel}.`
+        : `The effect of ${xCol.name} on ${yCol.name} does not depend on ${wCol.name}.`,
       detail: JSON.stringify({ simpleSlopes: slopes, jnRegions: result.jnRegions }),
       significant: intSig,
       pValue: intEffect.p,

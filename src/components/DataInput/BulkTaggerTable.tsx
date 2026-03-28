@@ -147,6 +147,35 @@ export function BulkTaggerTable({ blocks, onUpdateBlock, onConfirmAll }: BulkTag
     onConfirmAll()
   }, [blocks, onUpdateBlock, onConfirmAll])
 
+  // Check if any block is a behavioral block (show role column)
+  const hasBehavioralBlocks = useMemo(() =>
+    blocks.some((b) => b.role === 'metric'), [blocks])
+
+  const handleRoleToggle = useCallback((blockIdx: number, block: QuestionBlock) => {
+    const col = block.columns[0]
+    if (!col) return
+    const currentRole = col.behavioralRole ?? ((col.type === 'behavioral' || col.type === 'rating') ? 'metric' : 'dimension')
+    const newRole = currentRole === 'metric' ? 'dimension' as const : 'metric' as const
+    onUpdateBlock(blockIdx, {
+      ...block,
+      columns: block.columns.map((c) => ({ ...c, behavioralRole: newRole })),
+    })
+  }, [onUpdateBlock])
+
+  const handleMarkAllContinuousAsMetric = useCallback(() => {
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i]
+      if (block.role !== 'metric' || block.columns.length === 0) continue
+      const col = block.columns[0]
+      if (col.type === 'behavioral' || col.type === 'rating') {
+        onUpdateBlock(i, {
+          ...block,
+          columns: block.columns.map((c) => ({ ...c, behavioralRole: 'metric' as const })),
+        })
+      }
+    }
+  }, [blocks, onUpdateBlock])
+
   // Sample values for display
   const getSampleValues = useCallback((block: QuestionBlock): string => {
     const vals = block.columns[0]?.rawValues
@@ -166,6 +195,11 @@ export function BulkTaggerTable({ blocks, onUpdateBlock, onConfirmAll }: BulkTag
           <button className="btn btn-primary" onClick={handleConfirmAllHighConfidence}>
             Confirm all that look right
           </button>
+          {hasBehavioralBlocks && (
+            <button className="btn btn-secondary" onClick={handleMarkAllContinuousAsMetric}>
+              Mark all continuous as Metric
+            </button>
+          )}
           {reviewCount > 0 && (
             <span className="badge badge-amber bulk-review-badge" onClick={() => {
               const firstUnconfirmed = blocksWithData.find((b) => !b.confirmed)
@@ -187,6 +221,7 @@ export function BulkTaggerTable({ blocks, onUpdateBlock, onConfirmAll }: BulkTag
               <th>Column name</th>
               <th>Sample values</th>
               <th>Type</th>
+              {hasBehavioralBlocks && <th>Role</th>}
               <th>Status</th>
             </tr>
           </thead>
@@ -237,6 +272,20 @@ export function BulkTaggerTable({ blocks, onUpdateBlock, onConfirmAll }: BulkTag
                       ))}
                     </select>
                   </td>
+                  {hasBehavioralBlocks && (
+                    <td className="bulk-col-role">
+                      {block.role === 'metric' ? (
+                        <button
+                          className={`bulk-role-toggle ${(block.columns[0]?.behavioralRole ?? ((block.columns[0]?.type === 'behavioral' || block.columns[0]?.type === 'rating') ? 'metric' : 'dimension')) === 'metric' ? 'bulk-role-metric' : 'bulk-role-dimension'}`}
+                          onClick={() => handleRoleToggle(blockIdx, block)}
+                        >
+                          {(block.columns[0]?.behavioralRole ?? ((block.columns[0]?.type === 'behavioral' || block.columns[0]?.type === 'rating') ? 'metric' : 'dimension')) === 'metric' ? 'Metric' : 'Dimension'}
+                        </button>
+                      ) : (
+                        <span className="bulk-role-na">—</span>
+                      )}
+                    </td>
+                  )}
                   <td className="bulk-col-status">
                     {isConfirmed ? (
                       <span className="bulk-status-confirmed">Confirmed</span>

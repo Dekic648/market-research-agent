@@ -32,9 +32,15 @@ interface ColumnFrequency {
   items: FrequencyItem[]
   n: number
   nMissing: number
-  top2box: number      // % in top 2 values
-  bot2box: number      // % in bottom 2 values
-  netScore: number     // top2box - bot2box
+  topBox: number        // % in top values of the scale
+  bottomBox: number     // % in bottom values of the scale
+  topBoxLabel: string   // "Top 2 Box" or "Top Box" for 3-pt scales
+  bottomBoxLabel: string
+  netScore: number      // topBox - bottomBox
+  /** @deprecated Use topBox */
+  top2box: number
+  /** @deprecated Use bottomBox */
+  bot2box: number
   mean: number | null
   median: number | null
 }
@@ -46,7 +52,8 @@ interface ColumnFrequency {
 function computeFrequency(
   col: ResolvedColumn,
   nullMeaning: NullMeaning = 'missing',
-  rowCount?: number
+  rowCount?: number,
+  declaredScaleRange?: [number, number] | null
 ): ColumnFrequency {
   const counts = new Map<string | number, number>()
   let nMissing = 0
@@ -87,19 +94,48 @@ function computeFrequency(
       return String(a.value).localeCompare(String(b.value))
     })
 
-  // Top2Box / Bot2Box — for ordinal data with numeric values
-  let top2box = 0
-  let bot2box = 0
-  if (items.length >= 3 && nums.length > 0) {
+  // Top/Bottom Box — for ordinal data with numeric values
+  // Uses declaredScaleRange if available, otherwise infers from actual values
+  let topBox = 0
+  let bottomBox = 0
+  let topBoxLabel = 'Top 2 Box'
+  let bottomBoxLabel = 'Bottom 2 Box'
+
+  if (nums.length > 0) {
     const sortedItems = [...items].filter((it) => {
       const n = typeof it.value === 'number' ? it.value : parseFloat(String(it.value))
       return !isNaN(n)
     })
-    if (sortedItems.length >= 3) {
-      const top2 = sortedItems.slice(-2)
-      const bot2 = sortedItems.slice(0, 2)
-      top2box = top2.reduce((s, it) => s + it.pct, 0)
-      bot2box = bot2.reduce((s, it) => s + it.pct, 0)
+
+    if (sortedItems.length >= 2) {
+      // Determine scale range — declared takes priority, then infer
+      let scaleMin: number, scaleMax: number
+      if (declaredScaleRange) {
+        scaleMin = declaredScaleRange[0]
+        scaleMax = declaredScaleRange[1]
+      } else {
+        scaleMin = Number(sortedItems[0].value)
+        scaleMax = Number(sortedItems[sortedItems.length - 1].value)
+      }
+      const scalePoints = scaleMax - scaleMin + 1
+
+      if (scalePoints <= 3) {
+        // 3-point scale or smaller: single top/bottom box
+        topBoxLabel = 'Top Box'
+        bottomBoxLabel = 'Bottom Box'
+        const topItems = sortedItems.filter((it) => Number(it.value) === scaleMax)
+        const botItems = sortedItems.filter((it) => Number(it.value) === scaleMin)
+        topBox = topItems.reduce((s, it) => s + it.pct, 0)
+        bottomBox = botItems.reduce((s, it) => s + it.pct, 0)
+      } else {
+        // 4+ point scale: top 2 / bottom 2
+        const topThreshold = scaleMax - 1
+        const botThreshold = scaleMin + 1
+        const topItems = sortedItems.filter((it) => Number(it.value) >= topThreshold)
+        const botItems = sortedItems.filter((it) => Number(it.value) <= botThreshold)
+        topBox = topItems.reduce((s, it) => s + it.pct, 0)
+        bottomBox = botItems.reduce((s, it) => s + it.pct, 0)
+      }
     }
   }
 
@@ -119,9 +155,13 @@ function computeFrequency(
     items,
     n: valid,
     nMissing,
-    top2box,
-    bot2box,
-    netScore: top2box - bot2box,
+    topBox,
+    bottomBox,
+    topBoxLabel,
+    bottomBoxLabel,
+    netScore: topBox - bottomBox,
+    top2box: topBox,
+    bot2box: bottomBox,
     mean,
     median,
   }
@@ -245,7 +285,7 @@ const FrequencyPlugin: AnalysisPlugin = {
 
   async run(data: ResolvedColumnData): Promise<PluginStepResult> {
     const frequencies = data.columns.map((col) =>
-      computeFrequency(col, col.nullMeaning ?? 'missing', data.rowCount)
+      computeFrequency(col, col.nullMeaning ?? 'missing', data.rowCount, (col as any).declaredScaleRange)
     )
 
     const charts: ChartConfig[] = []
@@ -262,19 +302,36 @@ const FrequencyPlugin: AnalysisPlugin = {
     }
 
     // Generate findings
-    const findings = frequencies.map((freq) => ({
-      type: 'frequency',
-      title: `${freq.columnName} Distribution`,
-      summary: freq.mean !== null
-        ? `Mean = ${freq.mean.toFixed(2)}, n = ${freq.n}. Top 2 Box = ${freq.top2box.toFixed(1)}%, Net Score = ${freq.netScore > 0 ? '+' : ''}${freq.netScore.toFixed(1)}pp.`
-        : `${freq.n} responses across ${freq.items.length} categories. Mode: "${freq.items[0]?.value}" (${freq.items[0]?.pct.toFixed(1)}%).`,
-      detail: JSON.stringify(freq.items),
-      significant: false,
-      pValue: null,
-      effectSize: null,
-      effectLabel: null,
-      theme: null,
-    }))
+    const findings = frequencies.map((freq) => {
+      let summary: string
+      if (freq.mean !== null && freq.topBox > 0) {
+        const topNote = freq.topBox > 70 ? ' Strong positive rating.'
+          : freq.topBox < 40 ? ' Below average — majority are not rating positively.'
+          : ''
+        const netNote = freq.netScore < 0 ? ' More negative than positive ratings overall.' : ''
+        summary = `${freq.topBox.toFixed(0)}% rate ${freq.columnName} positively (${freq.topBoxLabel}). Net score: ${freq.netScore > 0 ? '+' : ''}${freq.netScore.toFixed(0)}pp.${topNote}${netNote} Mean = ${freq.mean.toFixed(2)}, n = ${freq.n}.`
+      } else {
+        summary = `${freq.n} responses across ${freq.items.length} categories. Mode: "${freq.items[0]?.value}" (${freq.items[0]?.pct.toFixed(1)}%).`
+      }
+
+      const strengthLabel = freq.topBox > 70 ? 'strong' : freq.topBox < 40 ? 'weak' : 'moderate'
+      const summaryLanguage = freq.mean !== null && freq.topBox > 0
+        ? `${freq.columnName} scores ${freq.topBox.toFixed(0)}% positive — ${strengthLabel}.`
+        : `${freq.columnName} has ${freq.items.length} response categories, with "${freq.items[0]?.value}" chosen most often (${freq.items[0]?.pct.toFixed(0)}%).`
+
+      return {
+        type: 'frequency',
+        title: `${freq.columnName} Distribution`,
+        summary,
+        summaryLanguage,
+        detail: JSON.stringify(freq.items),
+        significant: false,
+        pValue: null,
+        effectSize: null,
+        effectLabel: null,
+        theme: null,
+      }
+    })
 
     const columnNullMeanings = data.columns.map((c) => c.nullMeaning ?? 'missing')
     const result: PluginStepResult = {
@@ -310,9 +367,9 @@ const FrequencyPlugin: AnalysisPlugin = {
       return `${f.columnName}: ${f.n} responses across ${f.items.length} categories.`
     }
 
-    const bestItem = freqs.reduce((best, f) => (f.top2box > best.top2box ? f : best))
-    const worstItem = freqs.reduce((worst, f) => (f.top2box < worst.top2box ? f : worst))
-    return `${basePrefix}"${bestItem.columnName}" is the highest rated item (${bestItem.top2box.toFixed(0)}% positive). "${worstItem.columnName}" is the lowest rated (${worstItem.top2box.toFixed(0)}% positive).`
+    const bestItem = freqs.reduce((best, f) => (f.topBox > best.topBox ? f : best))
+    const worstItem = freqs.reduce((worst, f) => (f.topBox < worst.topBox ? f : worst))
+    return `${basePrefix}"${bestItem.columnName}" is the highest rated item (${bestItem.topBox.toFixed(0)}% positive). "${worstItem.columnName}" is the lowest rated (${worstItem.topBox.toFixed(0)}% positive).`
   },
 }
 

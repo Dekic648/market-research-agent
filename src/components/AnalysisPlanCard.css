@@ -1,0 +1,152 @@
+.plan-card {
+  padding: 20px;
+}
+
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.plan-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.plan-task-count {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 3px 12px;
+  border-radius: 12px;
+  background: var(--teal-bg);
+  color: var(--teal-text);
+}
+
+.plan-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.plan-tier {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.plan-tier-eligible {
+  border-left: 3px solid var(--teal);
+}
+
+.plan-tier-disabled {
+  border-left: 3px solid var(--border);
+  opacity: 0.6;
+}
+
+.plan-tier-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.plan-tier-icon {
+  width: 20px;
+  text-align: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.plan-tier-eligible .plan-tier-icon {
+  color: var(--teal);
+}
+
+.plan-tier-disabled .plan-tier-icon {
+  color: var(--text-faint);
+}
+
+.plan-tier-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-tier-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan-tier-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.plan-cross-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--teal-bg);
+  color: var(--teal-text);
+  white-space: nowrap;
+}
+
+.plan-tier5-toggle {
+  font-size: 12px;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px;
+}
+
+.plan-tier5-list {
+  padding: 8px 14px 12px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border-light);
+}
+
+.plan-tier5-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plan-outcome-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 14px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.plan-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-run-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+}
+
+.plan-explorer-link {
+  font-size: 12px;
+  color: var(--text-faint);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.plan-explorer-link:hover {
+  color: var(--accent);
+}

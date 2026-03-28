@@ -102,17 +102,22 @@ const PointBiserialPlugin: AnalysisPlugin = {
     const chart = buildGroupMeansChart(results)
     if (chart) charts.push(chart)
 
-    const findings = results.filter((r) => r.p < 0.05).map((r) => ({
-      type: 'point_biserial',
-      title: `${r.columnName} × ${r.binaryName}: r = ${r.r.toFixed(3)}`,
-      summary: `Group 0 mean = ${r.mean0.toFixed(2)}, Group 1 mean = ${r.mean1.toFixed(2)} (p ${r.p < 0.001 ? '< .001' : '= ' + r.p.toFixed(3)}).`,
-      detail: JSON.stringify(r),
-      significant: true,
-      pValue: r.p,
-      effectSize: r.r,
-      effectLabel: Math.abs(r.r) > 0.5 ? 'large' : Math.abs(r.r) > 0.3 ? 'medium' : 'small',
-      theme: null,
-    }))
+    const findings = results.filter((r) => r.p < 0.05).map((r) => {
+      const higherGroup = r.mean1 > r.mean0 ? 'Group 1' : 'Group 0'
+      const diff = Math.abs(r.mean1 - r.mean0)
+      return {
+        type: 'point_biserial',
+        title: `${r.columnName} × ${r.binaryName}: r = ${r.r.toFixed(3)}`,
+        summary: `Group 0 mean = ${r.mean0.toFixed(2)}, Group 1 mean = ${r.mean1.toFixed(2)} (p ${r.p < 0.001 ? '< .001' : '= ' + r.p.toFixed(3)}).`,
+        summaryLanguage: `${r.binaryName} is associated with ${r.columnName} — ${higherGroup} scores ${diff.toFixed(1)} points higher.`,
+        detail: JSON.stringify(r),
+        significant: true,
+        pValue: r.p,
+        effectSize: r.r,
+        effectLabel: Math.abs(r.r) > 0.5 ? 'large' : Math.abs(r.r) > 0.3 ? 'medium' : 'small',
+        theme: null,
+      }
+    })
 
     return {
       pluginId: 'point_biserial', data: { results }, charts, findings,

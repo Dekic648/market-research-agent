@@ -119,6 +119,55 @@
   margin-left: 4px;
 }
 
+.finding-crosstype-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--teal-bg);
+  color: var(--teal);
+  border: 1px solid var(--teal);
+  display: inline-block;
+  margin-bottom: 6px;
+  margin-left: 4px;
+  letter-spacing: 0.02em;
+}
+
+/* Section Summary Card (after each MethodSection) */
+.section-summary-card {
+  padding: 10px 16px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--teal);
+  margin-top: 4px;
+}
+
+.section-summary-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.section-summary-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.section-summary-link {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.section-summary-link:hover { color: var(--accent); }
+
 .finding-headline { margin-bottom: 8px; }
 
 .finding-key-metrics {

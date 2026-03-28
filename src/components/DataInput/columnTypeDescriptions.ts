@@ -13,13 +13,13 @@ export interface TypeDescription {
 
 export const TYPE_DESCRIPTIONS: Record<QuestionType, TypeDescription> = {
   rating: {
-    label: 'Scale or rating (e.g. 1–5 satisfaction)',
-    consequence: "We'll use rank-based tests. Good for comparing groups and measuring agreement.",
+    label: 'Single rating scale (e.g. 1–5 satisfaction)',
+    consequence: "One score per respondent per question. We'll use rank-based tests and compare across groups.",
     helpText: "Use this when respondents picked a number on a scale — like rating satisfaction from 1 to 5, or agreement from Strongly Disagree to Strongly Agree. The order of numbers matters but we don't assume the gap between 1 and 2 is the same as between 4 and 5.",
   },
   checkbox: {
-    label: 'Yes / No or binary choice',
-    consequence: "We'll use proportion tests and chi-square. Averages won't be computed.",
+    label: 'Checkbox or Yes/No (one column, 1 = selected)',
+    consequence: "Each column is one option — checked or not. We'll use proportion tests and chi-square. Good for single yes/no questions and individual checkbox items.",
     helpText: "Use this when there are exactly two possible answers — yes/no, pass/fail, buyer/non-buyer. We'll analyze proportions, not averages.",
   },
   category: {
@@ -28,9 +28,9 @@ export const TYPE_DESCRIPTIONS: Record<QuestionType, TypeDescription> = {
     helpText: "Use this when numbers or labels represent groups with no natural order — like country codes, brand names, or gender. Even if stored as 1, 2, 3, the numbers mean nothing mathematically.",
   },
   matrix: {
-    label: 'Scale battery (multiple items, same scale)',
-    consequence: "We'll test reliability across items and offer factor analysis.",
-    helpText: "Use this when multiple questions share the same scale and measure the same underlying thing — like a set of 5 questions all rated 1–5 measuring brand trust.",
+    label: 'Matrix / Grid question (multiple items, same scale)',
+    consequence: "e.g. 'Rate each of these attributes from 1–5'. We'll test reliability across items (Cronbach's \u03B1) and offer factor analysis.",
+    helpText: "Use this when multiple questions share the same scale and measure the same underlying thing — like a set of 5 questions all rated 1–5 measuring brand trust. This is the kind of question that shows up as a grid or table in a survey.",
   },
   behavioral: {
     label: 'Measured number (e.g. age, revenue, time)',
@@ -62,12 +62,18 @@ export const TYPE_DESCRIPTIONS: Record<QuestionType, TypeDescription> = {
     consequence: "We'll split codes into separate binary indicators for analysis.",
     helpText: 'Use this when a single cell contains multiple codes separated by commas or pipes — like theme codes "1,3,5" or "quality|price". Each code becomes its own yes/no variable.',
   },
+  multi_response: {
+    label: 'Checkbox grid (select all that apply)',
+    consequence: "Multiple columns, one per option. Supports Alchemer format (blank = not selected) and standard 0/1 format. We'll show reach per option and co-occurrence.",
+    helpText: "Use this when multiple columns represent one 'select all that apply' question — like 'Which features matter to you?' Each column is one option. Blank or 0 = not selected, any value = selected. Common in Alchemer/SurveyGizmo exports.",
+  },
 }
 
 /** Types available for user selection — excludes internal-only types */
 export const SELECTABLE_TYPES: QuestionType[] = [
   'rating',
   'matrix',
+  'multi_response',
   'checkbox',
   'category',
   'behavioral',

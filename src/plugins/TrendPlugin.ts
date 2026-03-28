@@ -75,10 +75,16 @@ const TrendPlugin: AnalysisPlugin = {
     const peakIdx = result.means.indexOf(Math.max(...result.means))
     const lowIdx = result.means.indexOf(Math.min(...result.means))
 
+    const firstMean = result.means[0] ?? 0
+    const lastMean = result.means[result.means.length - 1] ?? 0
+    const shift = lastMean - firstMean
+    const trendWord = result.overallTrend === 'increasing' ? 'increasing' : result.overallTrend === 'decreasing' ? 'decreasing' : 'flat'
+
     const findings = [{
       type: 'trend',
       title: `${valCol.name} — ${result.overallTrend} trend over ${granularity}`,
       summary: `${result.periods.length} ${granularity} periods analyzed. R² = ${result.trendStrength.toFixed(3)}.`,
+      summaryLanguage: `${valCol.name} is ${trendWord} over time — ${Math.abs(shift).toFixed(1)}-point shift from ${result.periods[0]} to ${result.periods[result.periods.length - 1]}.`,
       detail: JSON.stringify({ granularity, periods: result.periods.length }),
       significant: result.trendStrength > 0.1,
       pValue: null,

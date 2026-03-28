@@ -1,5 +1,5 @@
 /* ============================================================
-   TLDR Auto Report
+   TLDR Executive Summary — v2 (assembled from summaryLanguage)
    ============================================================ */
 
 .tldr-report {
@@ -9,110 +9,147 @@
   max-width: 860px;
 }
 
-/* Executive Summary */
-.tldr-executive {
-  padding: 20px 24px;
-  background: var(--teal-bg);
-  border-left: 4px solid var(--teal);
+/* Header */
+.tldr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.tldr-exec-title {
-  font-size: 16px;
+.tldr-header h2 {
+  font-size: 20px;
   font-weight: 600;
-  margin-bottom: 12px;
-  color: var(--teal-text);
 }
 
-.tldr-exec-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.tldr-copy-all {
+  font-size: 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.tldr-copy-all:hover { background: var(--bg-elevated); color: var(--text); }
+
+/* Section */
+.tldr-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-.tldr-exec-item {
+.tldr-section-header {
   font-size: 13px;
-  line-height: 1.6;
-  color: var(--teal-text);
-  padding-left: 16px;
-  position: relative;
-}
-
-.tldr-exec-item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 8px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--teal);
-}
-
-/* Tier sections */
-.tldr-tiers {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.tldr-tier-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tldr-tier-header {
-  font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
-  padding-bottom: 6px;
+  padding-bottom: 4px;
   border-bottom: 2px solid var(--border-light);
 }
 
-.tldr-tier-findings {
+.tldr-section-findings {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-/* Warnings section */
-.tldr-warnings {
-  padding: 16px 20px;
-  background: var(--amber-bg);
-  border-left: 4px solid var(--amber);
+/* Finding block */
+.tldr-finding {
+  padding: 14px 18px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-card);
 }
 
-.tldr-warnings-title {
+.tldr-finding-header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.tldr-finding-text {
+  flex: 1;
+}
+
+.tldr-summary {
   font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.tldr-metric-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--teal-bg);
+  color: var(--teal-text);
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tldr-cross-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--teal-bg);
+  color: var(--teal);
+  border: 1px solid var(--teal);
+}
+
+.tldr-copy-btn {
+  font-size: 14px;
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.tldr-copy-btn:hover { color: var(--text); }
+
+/* Mini chart */
+.tldr-mini-chart {
+  margin-top: 8px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+}
+
+/* Caveats */
+.tldr-caveats {
+  padding: 14px 18px;
+  background: var(--amber-bg);
+  border-left: 3px solid var(--amber);
+}
+
+.tldr-caveats-title {
+  font-size: 13px;
   font-weight: 600;
   color: var(--amber-text);
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
-.tldr-warning-item {
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.tldr-warning-item:last-child {
-  border-bottom: none;
-}
-
-.tldr-warning-finding {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 4px;
-}
-
-.tldr-warning-message {
+.tldr-caveats-text {
   font-size: 12px;
+  line-height: 1.6;
   color: var(--amber-text);
-  line-height: 1.5;
+}
+
+/* Non-significant count */
+.tldr-nonsig {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+  padding: 8px;
 }
 
 /* Empty state */

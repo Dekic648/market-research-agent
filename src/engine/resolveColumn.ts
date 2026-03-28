@@ -55,6 +55,13 @@ export function resolveColumn(
     values = applyTransform(values, transform)
   }
 
+  // Multi-response (Alchemer checkbox format): normalize code values to binary 1/0.
+  // Non-null value (the option code) → 1 (selected). Null → 0 (not selected).
+  if (definition.type === 'multi_response') {
+    values = values.map((v) => v === null ? 0 : 1)
+    return values
+  }
+
   // Prefixed ordinal: strip "N) " prefix for display, preserve numeric sort order.
   // rawValues keep the original string. Resolved values get the display label.
   // Sort order is handled by resolvePrefixedOrdinalSortKeys() — call separately when needed.
@@ -63,7 +70,7 @@ export function resolveColumn(
     values = values.map((v) => {
       if (v === null) return null
       const str = String(v)
-      const match = str.match(/^\d+\)\s*(.*)$/)
+      const match = str.match(/^\d+[)_]\s*(.*)$/)
       return match ? match[1] : str
     })
   }
@@ -88,7 +95,7 @@ export function resolvePrefixedOrdinalSortKeys(
   return definition.rawValues.map((v) => {
     if (v === null) return null
     const str = String(v)
-    const match = str.match(/^(\d+)\)/)
+    const match = str.match(/^(\d+)[)_]/)
     return match ? parseInt(match[1], 10) : null
   })
 }

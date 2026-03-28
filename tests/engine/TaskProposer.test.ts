@@ -25,32 +25,48 @@ import '../../src/plugins/SegmentProfilePlugin'
 function makeCol(id: string, name: string, n: number, values?: (number | string | null)[]): ColumnDefinition {
   const vals = values ?? Array.from({ length: n }, (_, i) => (i % 5) + 1)
   return {
-    id, name, type: 'rating', nRows: vals.length,
+    id, name, type: 'rating', format: 'rating', statisticalType: 'ordinal', role: 'analyze',
+    nRows: vals.length,
     nMissing: vals.filter((v) => v === null).length,
+    nullMeaning: 'missing',
     rawValues: vals, fingerprint: null, semanticDetectionCache: null,
     transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
   }
 }
 
+const statTypeMap: Record<string, string> = {
+  rating: 'ordinal', matrix: 'ordinal', behavioral: 'continuous',
+  category: 'categorical', radio: 'categorical', checkbox: 'binary',
+  multi_response: 'multi_response', verbatim: 'text', timestamped: 'temporal', weight: 'ordinal',
+}
+const blockRoleMap: Record<string, string> = {
+  question: 'analyze', segment: 'segment', weight: 'weight', behavioral: 'metric',
+}
+
 function makeBlock(
   id: string,
   label: string,
-  type: QuestionBlock['questionType'],
+  type: QuestionBlock['format'],
   nCols: number,
   nRows: number = 50,
-  role: QuestionBlock['role'] = 'question'
+  role: QuestionBlock['role'] = 'analyze'
 ): QuestionBlock {
-  const columns = Array.from({ length: nCols }, (_, i) =>
-    makeCol(`${id}_c${i}`, `${label} Item ${i + 1}`, nRows)
-  )
-  return { id, label, questionType: type, columns, role, confirmed: true, pastedAt: Date.now() }
+  const colFormat = type as any
+  const colStatType = (statTypeMap[type] ?? 'ordinal') as any
+  const colRole = (role === 'segment' ? 'segment' : role === 'weight' ? 'weight' : 'analyze') as any
+  const columns = Array.from({ length: nCols }, (_, i) => ({
+    ...makeCol(`${id}_c${i}`, `${label} Item ${i + 1}`, nRows),
+    format: colFormat, type: colFormat, statisticalType: colStatType, role: colRole,
+  }))
+  return { id, label, format: type, questionType: type, columns, role, confirmed: true, pastedAt: Date.now() }
 }
 
 function makeSegmentBlock(id: string, n: number): QuestionBlock {
   const vals = Array.from({ length: n }, (_, i) => i < n / 2 ? 'A' : 'B')
+  const col = { ...makeCol(`${id}_seg`, 'Segment', n, vals), format: 'category' as const, type: 'category' as const, statisticalType: 'categorical' as const, role: 'segment' as const }
   return {
-    id, label: 'Segment', questionType: 'category',
-    columns: [makeCol(`${id}_seg`, 'Segment', n, vals)],
+    id, label: 'Segment', format: 'category', questionType: 'category',
+    columns: [col],
     role: 'segment', confirmed: true, pastedAt: Date.now(),
   }
 }
@@ -460,14 +476,15 @@ describe('TaskProposer — cross-type bridge', () => {
   function makeBehavioralBlock(id: string, name: string, n: number = 50): QuestionBlock {
     const vals = Array.from({ length: n }, (_, i) => i * 1.5 + Math.random())
     return {
-      id, label: name, questionType: 'behavioral',
+      id, label: name, format: 'behavioral', questionType: 'behavioral',
       columns: [{
-        id: `${id}_c`, name, type: 'behavioral',
+        id: `${id}_c`, name, format: 'behavioral', type: 'behavioral',
+        statisticalType: 'continuous' as const, role: 'metric' as const,
         nRows: n, nMissing: 0, nullMeaning: 'missing',
         rawValues: vals, fingerprint: null, semanticDetectionCache: null,
         transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
       }],
-      role: 'question', confirmed: true, pastedAt: Date.now(),
+      role: 'analyze', confirmed: true, pastedAt: Date.now(),
     }
   }
 
@@ -521,5 +538,113 @@ describe('TaskProposer — cross-type bridge', () => {
     const tasks = proposeTasks(blocks)
     const bridgeTasks = tasks.filter((t) => t.source === 'cross_type_bridge')
     expect(bridgeTasks.length).toBeLessThanOrEqual(10)
+  })
+})
+
+// ============================================================
+// Behavioral block tests
+// ============================================================
+
+describe('TaskProposer — behavioral blocks', () => {
+  function makeBehavioralBlock(id: string, name: string, n: number = 50): QuestionBlock {
+    const vals = Array.from({ length: n }, (_, i) => i * 1.5 + Math.random())
+    return {
+      id, label: name, format: 'behavioral', questionType: 'behavioral',
+      columns: [{
+        id: `${id}_c`, name, format: 'behavioral', type: 'behavioral',
+        statisticalType: 'continuous' as const, role: 'metric' as const,
+        nRows: n, nMissing: 0, nullMeaning: 'missing',
+        rawValues: vals, fingerprint: null, semanticDetectionCache: null,
+        transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
+        behavioralRole: 'metric',
+      }],
+      role: 'metric', confirmed: true, pastedAt: Date.now(),
+    }
+  }
+
+  function makeBehavioralDimensionBlock(id: string, name: string, n: number = 50): QuestionBlock {
+    const vals = Array.from({ length: n }, (_, i) => i < n / 3 ? 'A' : i < 2 * n / 3 ? 'B' : 'C')
+    return {
+      id, label: name, format: 'category', questionType: 'category',
+      columns: [{
+        id: `${id}_c`, name, format: 'category', type: 'category',
+        statisticalType: 'categorical' as const, role: 'dimension' as const,
+        nRows: n, nMissing: 0, nullMeaning: 'missing',
+        rawValues: vals, fingerprint: null, semanticDetectionCache: null,
+        transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
+        behavioralRole: 'dimension',
+      }],
+      role: 'metric', confirmed: true, pastedAt: Date.now(),
+    }
+  }
+
+  it('metric columns from behavioral blocks appear in correlation proposals', () => {
+    const blocks = [
+      makeBlock('q1', 'Satisfaction', 'rating', 1),
+      makeBehavioralBlock('b1', 'gross_revenue'),
+    ]
+    const tasks = proposeTasks(blocks)
+    const correlations = tasks.filter((t) => t.pluginId === 'correlation')
+    expect(correlations.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('dimension columns from behavioral blocks are used as segment splits', () => {
+    const blocks = [
+      makeBlock('q1', 'Satisfaction', 'rating', 1),
+      makeBehavioralDimensionBlock('b1', 'DPS_tier'),
+    ]
+    const tasks = proposeTasks(blocks)
+    // Should have segment-based tasks (crosstab, kw_significance) since dimension provides segment
+    const segTasks = tasks.filter((t) => ['crosstab', 'kw_significance'].includes(t.pluginId))
+    expect(segTasks.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('segment blocks are excluded from allAnalyzable', () => {
+    const segVals = Array.from({ length: 50 }, (_, i) => i < 25 ? 'A' : 'B')
+    const blocks: QuestionBlock[] = [
+      makeBlock('q1', 'Satisfaction', 'rating', 1),
+      {
+        id: 'seg1', label: 'Segment', format: 'category', questionType: 'category',
+        columns: [{
+          id: 'seg1_c', name: 'Region', format: 'category', type: 'category',
+          statisticalType: 'categorical' as const, role: 'segment' as const,
+          nRows: 50, nMissing: 0, nullMeaning: 'missing',
+          rawValues: segVals, fingerprint: null, semanticDetectionCache: null,
+          transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
+        }],
+        role: 'segment', confirmed: true, pastedAt: Date.now(),
+      },
+    ]
+    const tasks = proposeTasks(blocks)
+    // Segment should only be used as split, not as an analyzable column
+    const freqTasks = tasks.filter((t) => t.pluginId === 'frequency')
+    // Only q1 should have a frequency task, not the segment
+    expect(freqTasks).toHaveLength(1)
+    expect(freqTasks[0].label).toContain('Satisfaction')
+  })
+
+  it('behavioralRole=dimension overrides type inference for metric columns', () => {
+    // A numeric column explicitly set to dimension should not appear in analysis
+    const numVals = Array.from({ length: 50 }, (_, i) => i * 10)
+    const blocks: QuestionBlock[] = [
+      makeBlock('q1', 'Satisfaction', 'rating', 1),
+      {
+        id: 'b1', label: 'Revenue', format: 'behavioral', questionType: 'behavioral',
+        columns: [{
+          id: 'b1_c', name: 'Revenue', format: 'behavioral', type: 'behavioral',
+          statisticalType: 'continuous' as const, role: 'dimension' as const,
+          nRows: 50, nMissing: 0, nullMeaning: 'missing',
+          rawValues: numVals, fingerprint: null, semanticDetectionCache: null,
+          transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
+          behavioralRole: 'dimension',  // explicitly set to dimension
+        }],
+        role: 'metric', confirmed: true, pastedAt: Date.now(),
+      },
+    ]
+    const tasks = proposeTasks(blocks)
+    // Revenue with role=dimension should be used as segment, not as a correlatable metric
+    const correlations = tasks.filter((t) => t.pluginId === 'correlation')
+    // No correlation should exist since only 1 analyzable block (q1) + the behavioral is a dimension
+    expect(correlations).toHaveLength(0)
   })
 })

@@ -183,19 +183,35 @@ const SignificancePlugin: AnalysisPlugin = {
 
     const sigCount = results.filter((r) => r.p < 0.05).length
 
+    // Compute group labels for summaryLanguage
+    const segGroups = new Map<string | number, true>()
+    for (const v of data.segment.values) {
+      if (v !== null) segGroups.set(v, true)
+    }
+
     const findings = results
       .filter((r) => r.p < 0.05)
-      .map((r) => ({
-        type: 'significance',
-        title: `${r.columnName} — significant difference across segments`,
-        summary: `H(${r.df}) = ${r.H.toFixed(2)}, p = ${r.p < 0.001 ? '<.001' : r.p.toFixed(3)}. Effect: ε² = ${r.epsilonSquared.toFixed(3)} (${r.effectLabel}).`,
-        detail: JSON.stringify(r),
-        significant: true,
-        pValue: r.p,
-        effectSize: r.epsilonSquared,
-        effectLabel: r.effectLabel,
-        theme: null,
-      }))
+      .map((r) => {
+        const maxMeanIdx = r.groupMeans.indexOf(Math.max(...r.groupMeans))
+        const minMeanIdx = r.groupMeans.indexOf(Math.min(...r.groupMeans))
+        const groupLabels = Array.from(segGroups.keys()).sort((a, b) => String(a).localeCompare(String(b)))
+        const highGroup = groupLabels[maxMeanIdx] ?? 'highest group'
+        const lowGroup = groupLabels[minMeanIdx] ?? 'lowest group'
+        const summaryLanguage = `${r.columnName} differs across ${data.segment!.name} — ${highGroup} scores highest, ${lowGroup} lowest (${r.effectLabel} difference).`
+
+        return {
+          type: 'significance',
+          title: `${r.columnName} — significant difference across segments`,
+          summary: `H(${r.df}) = ${r.H.toFixed(2)}, p = ${r.p < 0.001 ? '<.001' : r.p.toFixed(3)}. Effect: ε² = ${r.epsilonSquared.toFixed(3)} (${r.effectLabel}).`,
+          summaryLanguage,
+          detail: JSON.stringify(r),
+          significant: true,
+          pValue: r.p,
+          effectSize: r.epsilonSquared,
+          effectLabel: r.effectLabel,
+          theme: null,
+        }
+      })
 
     // Check preconditions
     const assumptions = this.preconditions.map((v) => v.validate(data))

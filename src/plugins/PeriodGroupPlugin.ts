@@ -59,6 +59,7 @@ const PeriodGroupPlugin: AnalysisPlugin = {
       type: 'period_frequency',
       title: `${totalN} responses across ${result.periods.length} ${granularity} periods`,
       summary: `Peak: ${result.periods[peakIdx]} (${result.counts[peakIdx]} responses).`,
+      summaryLanguage: `Responses peak in ${result.periods[peakIdx]} (${result.counts[peakIdx]} responses).`,
       detail: JSON.stringify({ granularity, periods: result.periods }),
       significant: false,
       pValue: null,

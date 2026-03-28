@@ -9,7 +9,7 @@
  * the architecture is broken.
  */
 
-import type { DatasetNode, ColumnDefinition, QuestionType } from '../types/dataTypes'
+import type { DatasetNode, ColumnDefinition, QuestionFormat } from '../types/dataTypes'
 import type { CapabilitySet, DataCapability } from '../plugins/types'
 
 export const CapabilityMatcher = {
@@ -44,9 +44,9 @@ export const CapabilityMatcher = {
     }
 
     // Scan column types
-    const typeCounts: Partial<Record<QuestionType, number>> = {}
+    const typeCounts: Partial<Record<QuestionFormat, number>> = {}
     for (const col of allColumns) {
-      typeCounts[col.type] = (typeCounts[col.type] ?? 0) + 1
+      typeCounts[col.format] = (typeCounts[col.format] ?? 0) + 1
     }
 
     // Map question types to capabilities
@@ -71,7 +71,7 @@ export const CapabilityMatcher = {
       caps.add('temporal')
       caps.add('continuous')
     }
-    if (typeCounts['multi_assigned']) {
+    if (typeCounts['multi_assigned'] || typeCounts['multi_response']) {
       caps.add('multiple_response')
       caps.add('categorical')
     }
@@ -91,7 +91,7 @@ export const CapabilityMatcher = {
         const allSameType = group.columns.every(
           (c) => c.type === group.columns[0].type
         )
-        if (allSameType && (group.questionType === 'rating' || group.questionType === 'matrix')) {
+        if (allSameType && (group.format === 'rating' || group.format === 'matrix')) {
           caps.add('repeated')
         }
       }
@@ -160,6 +160,7 @@ export const CapabilityMatcher = {
           caps.add('continuous')
           break
         case 'multi_assigned':
+        case 'multi_response':
           caps.add('multiple_response')
           caps.add('categorical')
           break

@@ -11,7 +11,7 @@
  * CapabilityMatcher is still consulted to gate proposals.
  */
 
-import type { QuestionBlock, AnalysisTask, ColumnRef, QuestionType } from '../types/dataTypes'
+import type { QuestionBlock, AnalysisTask, ColumnRef, QuestionFormat, ColumnRole } from '../types/dataTypes'
 import { CapabilityMatcher } from './CapabilityMatcher'
 import { AnalysisRegistry } from '../plugins/AnalysisRegistry'
 
@@ -26,9 +26,46 @@ import { AnalysisRegistry } from '../plugins/AnalysisRegistry'
 export function proposeTasks(
   blocks: QuestionBlock[],
 ): AnalysisTask[] {
-  const questions = blocks.filter((b) => b.role === 'question')
-  const segmentBlock = blocks.find((b) => b.role === 'segment') ?? null
-  const hasSegment = segmentBlock !== null
+  const questions = blocks.filter((b) => b.role === 'analyze')
+  const behavioralBlocks = blocks.filter((b) => b.role === 'metric')
+  const segmentBlocks = blocks.filter((b) => b.role === 'segment')
+  const segmentBlock = segmentBlocks[0] ?? null
+
+  // Build allAnalyzable: question blocks + metric columns from behavioral blocks.
+  // Behavioral blocks use behavioralRole to determine which columns are analyzable.
+  // Segment blocks are excluded from allAnalyzable — they provide only split variables.
+  const metricsFromBehavioral: QuestionBlock[] = []
+  for (const beh of behavioralBlocks) {
+    const metricCols = beh.columns.filter((c) => {
+      // Use explicit behavioralRole if set, otherwise infer from type
+      const role = c.role ?? ((c.format === 'behavioral' || c.format === 'rating') ? 'metric' : 'dimension')
+      return role === 'metric'
+    })
+    for (const col of metricCols) {
+      metricsFromBehavioral.push({
+        id: beh.id,
+        label: col.name,
+        format: col.format === 'rating' ? 'rating' : 'behavioral',
+        columns: [col],
+        role: 'analyze' as ColumnRole,
+        confirmed: beh.confirmed,
+        pastedAt: beh.pastedAt,
+      })
+    }
+  }
+
+  const allAnalyzable = [...questions, ...metricsFromBehavioral]
+
+  // Collect dimension columns from behavioral blocks to use as split variables
+  const dimensionsFromBehavioral = behavioralBlocks.flatMap((beh) =>
+    beh.columns.filter((c) => {
+      const role = c.role ?? ((c.format === 'behavioral' || c.format === 'rating') ? 'metric' : 'dimension')
+      return role === 'dimension'
+    })
+  )
+
+  // Determine segment: explicit segment blocks first, then dimension columns from behavioral blocks
+  const hasSegment = segmentBlock !== null || dimensionsFromBehavioral.length > 0
 
   const tasks: AnalysisTask[] = []
   let taskCounter = 0
@@ -37,14 +74,26 @@ export function proposeTasks(
     return `task_${pluginId}_${++taskCounter}`
   }
 
+  // Find the split variable: first categorical from segment block, or first dimension from behavioral
+  const segSplitCol = segmentBlock
+    ? segmentBlock.columns.find((c) => c.format === 'category' || c.format === 'radio')
+      ?? segmentBlock.columns[0]
+    : dimensionsFromBehavioral[0] ?? null
+  // The block ID that owns the split column
+  const segSplitBlockId = segmentBlock?.id ?? (dimensionsFromBehavioral.length > 0
+    ? behavioralBlocks.find((b) => b.columns.some((c) => c.id === segSplitCol?.id))?.id
+    : undefined)
+
   // ---- Pass 1: Within-question tasks ----
-  for (const block of questions) {
+  // Run Pass 1 on both question blocks AND metric columns from behavioral blocks.
+  // Behavioral metrics get 'descriptives' proposed via WITHIN_QUESTION_RULES.behavioral.always.
+  for (const block of [...questions, ...metricsFromBehavioral]) {
     const colRefs = block.columns.map((c) => ref(block.id, c.id))
-    const segRef = segmentBlock
-      ? ref(segmentBlock.id, segmentBlock.columns[0]?.id ?? segmentBlock.id)
+    const segRef = (segSplitCol && segSplitBlockId)
+      ? ref(segSplitBlockId, segSplitCol.id)
       : undefined
     const nItems = block.columns.length
-    const plan = WITHIN_QUESTION_RULES[block.questionType]
+    const plan = WITHIN_QUESTION_RULES[block.format]
 
     if (!plan) continue
 
@@ -81,12 +130,41 @@ export function proposeTasks(
 
   // ---- Pass 2: Cross-question tasks ----
 
-  // Driver analysis: single-item rating (outcome) + multi-item scales (predictors)
-  const singleRatings = questions.filter(
-    (b) => (b.questionType === 'rating' || b.questionType === 'behavioral') && b.columns.length === 1
+  // Descriptives summary: all ordinal columns across all blocks (Table 1 view)
+  const ordinalColumns = allAnalyzable.flatMap((b) =>
+    b.columns.filter((c) => c.format === 'rating' || c.format === 'matrix')
   )
-  const multiItemScales = questions.filter(
-    (b) => (b.questionType === 'rating' || b.questionType === 'matrix' || b.questionType === 'behavioral') && b.columns.length >= 2
+  if (ordinalColumns.length >= 2 && pluginExists('descriptives_summary')) {
+    const allRefs: ColumnRef[] = []
+    const sourceIds: string[] = []
+    for (const block of allAnalyzable) {
+      for (const col of block.columns) {
+        if (col.format === 'rating' || col.format === 'matrix') {
+          allRefs.push(ref(block.id, col.id))
+          if (!sourceIds.includes(block.id)) sourceIds.push(block.id)
+        }
+      }
+    }
+    tasks.push({
+      id: nextId('descriptives_summary'),
+      pluginId: 'descriptives_summary',
+      label: `Summary: ${ordinalColumns.length} survey questions compared`,
+      inputs: { columns: allRefs },
+      sourceQuestionIds: sourceIds,
+      dependsOn: [],
+      proposedBy: 'system',
+      reason: `${ordinalColumns.length} ordinal columns → summary comparison table with Top Box ranking`,
+      status: 'proposed',
+    })
+  }
+
+  // Driver analysis: single-item rating (outcome) + multi-item scales (predictors)
+  // allAnalyzable includes behavioral columns extracted from segment blocks
+  const singleRatings = allAnalyzable.filter(
+    (b) => (b.format === 'rating' || b.format === 'behavioral') && b.columns.length === 1
+  )
+  const multiItemScales = allAnalyzable.filter(
+    (b) => (b.format === 'rating' || b.format === 'matrix' || b.format === 'behavioral') && b.columns.length >= 2
   )
 
   for (const outcomeBlock of singleRatings) {
@@ -143,8 +221,8 @@ export function proposeTasks(
   }
 
   // Cross-scale correlation: 2+ rating/matrix blocks
-  const correlableBlocks = questions.filter(
-    (b) => (b.questionType === 'rating' || b.questionType === 'matrix' || b.questionType === 'behavioral')
+  const correlableBlocks = allAnalyzable.filter(
+    (b) => (b.format === 'rating' || b.format === 'matrix' || b.format === 'behavioral')
       && b.columns.length >= 1
   )
   if (correlableBlocks.length >= 2 && pluginExists('correlation')) {
@@ -170,11 +248,11 @@ export function proposeTasks(
   }
 
   // Point-biserial: binary block + continuous blocks
-  const binaryBlocks = questions.filter(
-    (b) => b.questionType === 'checkbox' && b.columns.length >= 1
+  const binaryBlocks = allAnalyzable.filter(
+    (b) => b.format === 'checkbox' && b.columns.length >= 1
   )
-  const continuousBlocks = questions.filter(
-    (b) => (b.questionType === 'rating' || b.questionType === 'matrix' || b.questionType === 'behavioral')
+  const continuousBlocks = allAnalyzable.filter(
+    (b) => (b.format === 'rating' || b.format === 'matrix' || b.format === 'behavioral')
       && b.columns.length >= 1
   )
   if (binaryBlocks.length > 0 && continuousBlocks.length > 0 && pluginExists('point_biserial')) {
@@ -201,10 +279,39 @@ export function proposeTasks(
     })
   }
 
+  // Logistic regression: binary outcome + continuous predictors
+  if (binaryBlocks.length > 0 && continuousBlocks.length > 0 && pluginExists('logistic_regression')) {
+    for (const binaryBlock of binaryBlocks) {
+      if (binaryBlock.columns[0]?.nRows < 50) continue
+      const predictorRefs: ColumnRef[] = []
+      const sourceIds: string[] = [binaryBlock.id]
+      for (const cb of continuousBlocks) {
+        for (const col of cb.columns) {
+          predictorRefs.push(ref(cb.id, col.id))
+        }
+        if (!sourceIds.includes(cb.id)) sourceIds.push(cb.id)
+      }
+      if (predictorRefs.length >= 1) {
+        const outcomeRef = ref(binaryBlock.id, binaryBlock.columns[0].id)
+        tasks.push({
+          id: nextId('logistic_regression'),
+          pluginId: 'logistic_regression',
+          label: `Logistic: What predicts ${binaryBlock.label}?`,
+          inputs: { columns: predictorRefs, outcome: outcomeRef },
+          sourceQuestionIds: sourceIds,
+          dependsOn: [],
+          proposedBy: 'system',
+          reason: `Binary outcome "${binaryBlock.label}" with ${predictorRefs.length} continuous predictor(s) → logistic regression`,
+          status: 'proposed',
+        })
+      }
+    }
+  }
+
   // Temporal × continuous: trend over time and time segment comparison
-  const temporalBlocks = questions.filter((b) => b.questionType === 'timestamped' && b.columns.length >= 1)
-  const numericBlocks = questions.filter(
-    (b) => (b.questionType === 'rating' || b.questionType === 'matrix' || b.questionType === 'behavioral')
+  const temporalBlocks = allAnalyzable.filter((b) => b.format === 'timestamped' && b.columns.length >= 1)
+  const numericBlocks = allAnalyzable.filter(
+    (b) => (b.format === 'rating' || b.format === 'matrix' || b.format === 'behavioral')
       && b.columns.length >= 1
   )
   if (temporalBlocks.length > 0 && numericBlocks.length > 0) {
@@ -249,8 +356,8 @@ export function proposeTasks(
 
   // Mediation: 3 continuous columns where one is a plausible outcome
   const outcomeKeywords = ['satisfaction', 'nps', 'rating', 'score', 'overall', 'loyalty', 'intent']
-  const continuousForMediation = questions.filter(
-    (b) => (b.questionType === 'rating' || b.questionType === 'behavioral' || b.questionType === 'matrix')
+  const continuousForMediation = allAnalyzable.filter(
+    (b) => (b.format === 'rating' || b.format === 'behavioral' || b.format === 'matrix')
       && b.columns.length === 1
   )
   if (continuousForMediation.length >= 3 && pluginExists('mediation')) {
@@ -281,11 +388,11 @@ export function proposeTasks(
   }
 
   // Survey × Behavioral bridge
-  const surveyBridgeBlocks = questions.filter((b) =>
-    ['rating', 'matrix', 'checkbox'].includes(b.questionType) && b.confirmed
+  const surveyBridgeBlocks = allAnalyzable.filter((b) =>
+    ['rating', 'matrix', 'checkbox'].includes(b.format) && b.confirmed
   )
-  const behavioralBridgeBlocks = questions.filter((b) =>
-    b.questionType === 'behavioral' && b.confirmed
+  const behavioralBridgeBlocks = allAnalyzable.filter((b) =>
+    b.format === 'behavioral' && b.confirmed
   )
 
   if (surveyBridgeBlocks.length > 0 && behavioralBridgeBlocks.length > 0) {
@@ -297,7 +404,7 @@ export function proposeTasks(
     // Rule 1: correlation for behavioral × rating pairs (max 3 each side)
     const topBehavioral = behavioralBridgeBlocks.slice(0, 3)
     const topSurvey = surveyBridgeBlocks
-      .filter((b) => b.questionType === 'rating' || b.questionType === 'matrix')
+      .filter((b) => b.format === 'rating' || b.format === 'matrix')
       .slice(0, 3)
 
     if (pluginExists('correlation')) {
@@ -329,7 +436,7 @@ export function proposeTasks(
         BRIDGE_OUTCOME_KW.some((kw) => b.columns[0].name.toLowerCase().includes(kw))
       )
       const ratingPredictors = surveyBridgeBlocks
-        .filter((b) => b.questionType === 'rating' || b.questionType === 'matrix')
+        .filter((b) => b.format === 'rating' || b.format === 'matrix')
         .flatMap((b) => b.columns)
         .slice(0, 8)
 
@@ -388,11 +495,11 @@ export function getPluginApplicability(
   }
 
   // Check question-type rules
-  const rules = WITHIN_QUESTION_RULES[block.questionType]
+  const rules = WITHIN_QUESTION_RULES[block.format]
   if (rules?.never.includes(pluginId)) {
     return {
       applicable: false,
-      reason: `Not applicable to ${block.questionType} questions`,
+      reason: `Not applicable to ${block.format} questions`,
     }
   }
 
@@ -438,7 +545,7 @@ interface QuestionRules {
   never: string[]
 }
 
-const WITHIN_QUESTION_RULES: Partial<Record<QuestionType, QuestionRules>> = {
+const WITHIN_QUESTION_RULES: Partial<Record<QuestionFormat, QuestionRules>> = {
   rating: {
     always: ['frequency'],
     withSegment: ['crosstab', 'kw_significance', 'segment_profile'],
@@ -472,7 +579,7 @@ const WITHIN_QUESTION_RULES: Partial<Record<QuestionType, QuestionRules>> = {
     never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa', 'power_analysis'],
   },
   behavioral: {
-    always: [],
+    always: ['descriptives'],
     withSegment: [],
     withMultipleItems: ['correlation'],
     never: ['frequency', 'crosstab', 'kw_significance',
@@ -496,6 +603,13 @@ const WITHIN_QUESTION_RULES: Partial<Record<QuestionType, QuestionRules>> = {
     withSegment: ['crosstab'],
     withMultipleItems: [],
     never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa', 'power_analysis'],
+  },
+  multi_response: {
+    always: ['frequency'],
+    withSegment: ['crosstab'],
+    withMultipleItems: [],
+    never: ['kw_significance', 'regression', 'driver_analysis', 'correlation', 'cronbach',
+            'efa', 'ordinal_regression', 'mediation', 'moderation_analysis', 'point_biserial', 'power_analysis'],
   },
   weight: {
     always: [],
@@ -527,7 +641,7 @@ function makeTask(
   _segForInputs: ColumnRef | undefined,
   outcomeRef: ColumnRef | undefined,
 ): AnalysisTask {
-  const rules = WITHIN_QUESTION_RULES[block.questionType]
+  const rules = WITHIN_QUESTION_RULES[block.format]
   const isSegmentPlugin = ['crosstab', 'kw_significance', 'posthoc', 'segment_profile'].includes(pluginId)
 
   return {
@@ -619,7 +733,7 @@ function pluginLabel(pluginId: string): string {
 }
 
 function buildReason(pluginId: string, block: QuestionBlock, rules?: QuestionRules): string {
-  const type = block.questionType
+  const type = block.format
   const n = block.columns.length
 
   if (rules?.always.includes(pluginId)) return `${type} question → ${pluginLabel(pluginId)}`

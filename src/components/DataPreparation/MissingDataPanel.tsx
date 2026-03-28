@@ -20,7 +20,7 @@ export function MissingDataPanel({ columns, onImputationComplete }: MissingDataP
   // Only show 'missing' columns in diagnostics — not_chosen and not_asked are excluded
   const eligibleColumns = useMemo(
     () => columns.filter((c) =>
-      c.type !== 'checkbox' && c.type !== 'multi_assigned'
+      c.type !== 'checkbox' && c.type !== 'multi_assigned' && c.type !== 'multi_response'
       && (c.nullMeaning === 'missing' || c.nullMeaning === undefined)
     ),
     [columns]

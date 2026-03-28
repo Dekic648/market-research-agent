@@ -140,10 +140,21 @@ const FactorPlugin: AnalysisPlugin = {
     const charts = [buildScreePlot(pcaResult.eigenvalues), buildLoadingsHeatmap(result)]
     const assumptions = this.preconditions.map((v) => v.validate(data))
 
+    // Identify top-loading items for Factor 1 for summaryLanguage
+    const factor1Items = result.columnNames
+      .map((name, i) => ({ name, loading: result.loadings[i]?.[0] ?? 0 }))
+      .filter((x) => Math.abs(x.loading) > 0.4)
+      .sort((a, b) => Math.abs(b.loading) - Math.abs(a.loading))
+      .slice(0, 3)
+    const factor1Str = factor1Items.length > 0
+      ? factor1Items.map((x) => x.name).join(', ')
+      : result.columnNames[0] ?? 'the items'
+
     const findings = [{
       type: 'factor_analysis',
       title: `${nFactors} factor(s) extracted, explaining ${(totalVar * 100).toFixed(1)}% of variance`,
       summary: `Kaiser criterion identified ${nFactorsKaiser} factor(s) with eigenvalue > 1. Varimax rotation applied.`,
+      summaryLanguage: `${nFactors} underlying factor${nFactors === 1 ? '' : 's'} explain ${(totalVar * 100).toFixed(0)}% of variance. Factor 1 groups ${factor1Str}.`,
       detail: JSON.stringify({ eigenvalues: pcaResult.eigenvalues.slice(0, 5) }),
       significant: totalVar > 0.5,
       pValue: null,

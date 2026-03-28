@@ -39,6 +39,9 @@ interface DatasetGraphState {
   // Weight operations
   setComputedWeights: (nodeId: string, weights: number[], label: string) => void
 
+  // Behavioral role operations
+  setBehavioralRole: (nodeId: string, columnId: string, role: 'metric' | 'dimension') => void
+
   // Subgroup operations
   setSubgroup: (nodeId: string, filter: SubgroupFilter) => void
   clearSubgroup: (nodeId: string) => void
@@ -193,6 +196,9 @@ export const useDatasetGraphStore = create<DatasetGraphState>()((set, get) => ({
         const syntheticCol: ColumnDefinition = {
           id: `computed_weight_${nodeId}`,
           name: label,
+          format: 'weight',
+          statisticalType: 'continuous',
+          role: 'weight',
           type: 'weight',
           nRows: weights.length,
           nMissing: 0,
@@ -206,6 +212,15 @@ export const useDatasetGraphStore = create<DatasetGraphState>()((set, get) => ({
         }
         return { ...node, weights: syntheticCol, dataVersion: node.dataVersion + 1 }
       }),
+    })),
+
+  setBehavioralRole: (nodeId, columnId, role) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === nodeId
+          ? updateColumnInNode(n, columnId, (col) => ({ ...col, behavioralRole: role }))
+          : n
+      ),
     })),
 
   setSubgroup: (nodeId, filter) =>

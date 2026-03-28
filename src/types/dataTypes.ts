@@ -1,36 +1,72 @@
 /**
  * All shared domain types for the v2 platform.
  * Source of truth — never redefine these elsewhere.
+ *
+ * Three-axis type model:
+ *   1. QuestionFormat  — how the question was collected (survey design language)
+ *   2. StatisticalType  — what the engine sees (drives CapabilityMatcher)
+ *   3. ColumnRole       — what the column is used for in analysis
  */
 
 // ============================================================
-// Question & Column Types
+// Axis 1: QuestionFormat — how data was collected
 // ============================================================
 
-export type QuestionType =
-  | 'rating'
-  | 'matrix'
-  | 'checkbox'
-  | 'radio'
-  | 'category'
-  | 'behavioral'
-  | 'verbatim'        // free text — emits 'text' capability, never numeric
-  | 'timestamped'     // date/time — emits 'temporal' capability
-  | 'multi_assigned'  // pipe/comma-separated codes — explodes to binary matrix
-  | 'weight'          // respondent weight column
+export type QuestionFormat =
+  | 'rating'           // single score per respondent — 1–5, 1–10
+  | 'matrix'           // multiple items, same scale (battery / grid)
+  | 'checkbox'         // binary single question — yes/no, 0/1
+  | 'radio'            // single select from list
+  | 'category'         // categorical labels — gender, region, brand
+  | 'behavioral'       // CRM/product/telemetry data
+  | 'verbatim'         // free text — open-ended
+  | 'timestamped'      // date/time column
+  | 'multi_assigned'   // pipe/comma-separated codes in one column
+  | 'multi_response'   // checkbox grid — multiple columns, one per option
+  | 'weight'           // respondent weight column
 
-export type BehavioralSubtype =
-  | 'proportion'      // range [0,1], continuous
-  | 'spend'           // zero-inflated, right-skewed
-  | 'count'           // non-negative integers
-  | 'ordinal_rank'    // integers with natural order, small range (e.g. 1-10)
-  | 'metric'          // general continuous
+/** @deprecated Use QuestionFormat. Alias kept for migration — will be removed. */
+export type QuestionType = QuestionFormat
 
-export type CategorySubtype =
-  | 'nominal'         // pure categorical, no order
-  | 'prefixed_ordinal' // strings like "0) NonPayer", "3) Dolphin"
-  | 'geo'             // country, region, city
-  | 'constant'        // nUnique = 1 — excluded from analysis
+// ============================================================
+// Axis 2: StatisticalType — what the engine sees
+// ============================================================
+
+export type StatisticalType =
+  | 'ordinal'          // bounded scale — rank-based tests
+  | 'continuous'       // unbounded numeric — parametric tests
+  | 'categorical'      // labels, no natural order
+  | 'binary'           // 0/1 or yes/no — single column
+  | 'multi_response'   // checkbox grid — reach % analysis
+  | 'text'             // verbatim — no statistical tests
+  | 'temporal'         // datetime — temporal analysis
+  | 'count'            // non-negative integers — Poisson eligible
+  | 'spend'            // zero-inflated continuous — log-transform eligible
+  | 'proportion'       // range [0,1] continuous
+  | 'prefixed_ordinal' // strings like "2) Minnow" — auto-converted to ordinal
+  | 'constant'         // nUnique = 1 — excluded from analysis
+  | 'geo'              // geographic categorical — country, region, city
+
+/** @deprecated Use StatisticalType. */
+export type BehavioralSubtype = 'proportion' | 'spend' | 'count' | 'ordinal_rank' | 'metric'
+/** @deprecated Use StatisticalType. */
+export type CategorySubtype = 'nominal' | 'prefixed_ordinal' | 'geo' | 'constant'
+
+// ============================================================
+// Axis 3: ColumnRole — what the column is used for
+// ============================================================
+
+export type ColumnRole =
+  | 'analyze'          // survey question — primary analysis target
+  | 'segment'          // split/grouping variable
+  | 'metric'           // behavioral metric — analyze
+  | 'dimension'        // behavioral dimension — use as split
+  | 'weight'           // respondent weight
+  | 'unused'           // excluded from analysis
+
+// ============================================================
+// Column Fingerprint — structural identity
+// ============================================================
 
 export interface ColumnFingerprint {
   columnId: string
@@ -64,6 +100,10 @@ export interface DetectionSource {
   timestamp: number
 }
 
+// ============================================================
+// Transforms — non-destructive column modifications
+// ============================================================
+
 export type TransformType =
   | 'reverseCode'
   | 'labelMap'
@@ -85,23 +125,39 @@ export interface Transform {
   source: 'user' | 'auto-detected'
 }
 
+// ============================================================
+// Null Semantics
+// ============================================================
+
 export type NullMeaning = 'not_chosen' | 'not_asked' | 'missing'
+
+// ============================================================
+// Column Definition — the core data unit
+// ============================================================
 
 export interface ColumnDefinition {
   id: string
   name: string
-  type: QuestionType
-  subtype?: BehavioralSubtype | CategorySubtype  // refined classification (legacy, kept for compat)
-  behavioralSubtype?: BehavioralSubtype
-  categorySubtype?: CategorySubtype
+
+  /** How this data was collected — survey format / data source type */
+  format: QuestionFormat
+
+  /** What the engine sees — drives CapabilityMatcher and method selection */
+  statisticalType: StatisticalType
+
+  /** What this column is used for in analysis */
+  role: ColumnRole
+
   nRows: number
   nMissing: number
+
   // NULL SEMANTICS — always check nullMeaning before analyzing a column.
   // 'not_chosen': null counts as 0. Use rowCount as denominator. Never impute.
   // 'not_asked':  null means excluded. Use non-null count as denominator. Never impute.
   // 'missing':    null means unknown. Each analysis uses available (non-null) values.
   // Columns with nullMeaning 'not_chosen' or 'not_asked' are excluded from missing data diagnostics.
   nullMeaning: NullMeaning
+
   rawValues: (number | string | null)[]     // immutable after parse — NEVER written to after adapter
   imputedValues?: (number | string | null)[] // set by MICE — used by resolveColumn when nullMeaning === 'missing'
   fingerprint: ColumnFingerprint | null      // null until fingerprint phase
@@ -109,6 +165,18 @@ export interface ColumnDefinition {
   transformStack: Transform[]               // empty array until transform phase
   sensitivity: 'anonymous' | 'pseudonymous' | 'personal'  // default: 'anonymous'
   declaredScaleRange: [number, number] | null
+
+  // ---- Deprecated fields — kept for migration, will be removed ----
+  /** @deprecated Use format */
+  type?: QuestionFormat
+  /** @deprecated Use statisticalType */
+  subtype?: BehavioralSubtype | CategorySubtype
+  /** @deprecated Use statisticalType */
+  behavioralSubtype?: BehavioralSubtype
+  /** @deprecated Use statisticalType */
+  categorySubtype?: CategorySubtype
+  /** @deprecated Use role ('metric' | 'dimension') */
+  behavioralRole?: 'metric' | 'dimension'
 }
 
 // ============================================================
@@ -116,7 +184,9 @@ export interface ColumnDefinition {
 // ============================================================
 
 export interface DataGroup {
-  questionType: QuestionType
+  format: QuestionFormat
+  /** @deprecated Use format */
+  questionType?: QuestionFormat
   columns: ColumnDefinition[]
   label: string
   scaleRange?: [number, number]
@@ -134,10 +204,19 @@ export interface PastedData {
 export interface QuestionBlock {
   id: string
   label: string                     // user-editable, e.g. "Q3: Overall Satisfaction"
-  questionType: QuestionType
+
+  /** How this question was collected */
+  format: QuestionFormat
+
+  /** @deprecated Use format */
+  questionType?: QuestionFormat
+
   columns: ColumnDefinition[]
   scaleRange?: [number, number]
-  role: 'question' | 'segment' | 'weight'
+
+  /** Block-level role — determines how columns participate in analysis */
+  role: ColumnRole
+
   confirmed: boolean                // user explicitly confirmed the type classification
   pastedAt: number
 }
@@ -171,6 +250,8 @@ export interface AnalysisTask {
   proposedBy: 'system' | 'user'
   reason: string                    // "Matrix scale with 5 items → reliability analysis"
   source?: string                   // 'cross_type_bridge' for survey×behavioral proposals
+  crossType?: boolean               // true for survey × behavioral proposals
+  requiresConfirmation?: boolean    // true for Tier 5 — must be explicitly checked
 
   status: 'proposed' | 'confirmed' | 'skipped'
         | 'running' | 'complete' | 'failed'
@@ -306,6 +387,10 @@ export interface Finding {
   sourceColumns?: string[]
   /** Question block label — for display headers */
   sourceQuestionLabel?: string
+  /** True for findings from survey × behavioral cross-type analysis */
+  crossType?: boolean
+  /** Punchy 1-2 sentence summary for TLDR — no jargon, no test names, no p-values */
+  summaryLanguage: string
 }
 
 export interface VerificationResult {
@@ -314,6 +399,30 @@ export interface VerificationResult {
   severity: 'warning' | 'info'
   detail: Record<string, unknown>
   message: string
+}
+
+// ============================================================
+// Analysis Plan — five-tier waterfall
+// ============================================================
+
+export interface AnalysisTier {
+  id: 1 | 2 | 3 | 4 | 5
+  label: string
+  description: string
+  plugins: string[]
+  eligible: boolean
+  reason?: string        // shown in UI when eligible: false
+  crossType?: boolean    // true for survey × behavioral proposals
+  tasks: AnalysisTask[]  // populated by buildAnalysisPlan()
+}
+
+export interface AnalysisPlan {
+  tiers: AnalysisTier[]
+  detectedOutcome: string | null     // column name if auto-detected
+  detectedSegments: string[]         // column names
+  detectedBehavioral: string[]       // behavioral metric column names
+  confirmedByUser: boolean
+  generatedAt: number
 }
 
 // ============================================================
@@ -334,6 +443,7 @@ export interface SessionState {
   currentFlowIndex: number
   stepResults: StepResult[]
   activeDatasetNodeId: string | null
+  analysisPlan: AnalysisPlan | null
 }
 
 // ============================================================

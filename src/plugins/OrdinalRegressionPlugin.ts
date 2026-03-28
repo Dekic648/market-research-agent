@@ -76,6 +76,9 @@ const OrdinalRegressionPlugin: AnalysisPlugin = {
         ? `${topCoef.name} predicts ${outcome.name} (OR=${topCoef.oddsRatio.toFixed(2)})`
         : `No significant predictors of ${outcome.name}`,
       summary: `Pseudo R² = ${reg.pseudoR2.toFixed(3)}. ${sigCoefs.length} significant predictor(s). ${reg.levels.length} ordinal levels.`,
+      summaryLanguage: topCoef
+        ? `${topCoef.name} most strongly predicts ${outcome.name} category.`
+        : `None of the predictors meaningfully predict ${outcome.name} category.`,
       detail: JSON.stringify(reg.coefficients),
       significant: reg.converged && sigCoefs.length > 0,
       pValue: topCoef?.p ?? null,

@@ -17,14 +17,22 @@ import '../../src/plugins/PostHocPlugin'
 // Helpers
 // ============================================================
 
+const statTypeMap: Record<string, string> = {
+  rating: 'ordinal', matrix: 'ordinal', behavioral: 'continuous',
+  category: 'categorical', radio: 'categorical', checkbox: 'binary',
+  multi_response: 'multi_response', verbatim: 'text', timestamped: 'temporal', weight: 'ordinal',
+}
+
 function makeCol(
-  id: string, name: string, type: ColumnDefinition['type'],
+  id: string, name: string, type: ColumnDefinition['format'],
   values: (number | string | null)[]
 ): ColumnDefinition {
+  const colStatType = (statTypeMap[type] ?? 'ordinal') as any
   return {
-    id, name, type,
+    id, name, format: type, type, statisticalType: colStatType, role: 'analyze',
     nRows: values.length,
     nMissing: values.filter((v) => v === null).length,
+    nullMeaning: 'missing',
     rawValues: values,
     fingerprint: null,
     semanticDetectionCache: null,
@@ -35,11 +43,12 @@ function makeCol(
 }
 
 function makeNode(columns: ColumnDefinition[], segment?: ColumnDefinition): DatasetNode {
+  const fmt = columns[0]?.format ?? 'rating'
   return {
     id: 'node1',
     label: 'Test',
     parsedData: {
-      groups: [{ questionType: columns[0]?.type ?? 'rating', columns, label: 'Test Group' }],
+      groups: [{ format: fmt, questionType: fmt, columns, label: 'Test Group' }],
       segments: segment,
     },
     rowCount: columns[0]?.nRows ?? 0,

@@ -27,6 +27,9 @@ import { AnalysisRegistry } from '../../plugins/AnalysisRegistry'
 import { HeadlessRunner } from '../../runners/HeadlessRunner'
 import { extractWeights } from '../../engine/weightExtractor'
 import { proposeTasks } from '../../engine/TaskProposer'
+import { buildAnalysisPlan, proposeTasksFromPlan } from '../../engine/analysisPlan'
+import { AnalysisPlanCard } from '../AnalysisPlanCard'
+import type { AnalysisPlan } from '../../types/dataTypes'
 import type { RunResult } from '../../runners/IStepRunner'
 
 // Register all plugins
@@ -41,6 +44,10 @@ import '../../plugins/DriverPlugin'
 import '../../plugins/CorrelationPlugin'
 import '../../plugins/PointBiserialPlugin'
 import '../../plugins/SegmentProfilePlugin'
+import '../../plugins/DescriptivesPlugin'
+import '../../plugins/DescriptivesSummaryPlugin'
+import '../../plugins/LogisticRegressionPlugin'
+import '../../plugins/ANOVAPlugin'
 
 type Step = 'blocks' | 'review' | 'analyzing' | 'results' | 'report'
 
@@ -52,6 +59,7 @@ export function DataWorkspace() {
   const [taskStepResults, setTaskStepResults] = useState<Record<string, import('../../plugins/types').PluginStepResult>>({})
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [resultsTab, setResultsTab] = useState<'results' | 'explore'>('results')
+  const [analysisPlan, setAnalysisPlan] = useState<AnalysisPlan | null>(null)
 
   const addNode = useDatasetGraphStore((s) => s.addNode)
   const setActiveDatasetNode = useSessionStore((s) => s.setActiveDatasetNode)
@@ -64,19 +72,27 @@ export function DataWorkspace() {
     setQuestionBlocks(blocks)
 
     // Store dataset node for the store system
-    const questions = blocks.filter((b) => b.role === 'question')
+    const questions = blocks.filter((b) => b.role === 'analyze')
+    const behavioralBlocks = blocks.filter((b) => b.role === 'metric')
     const segBlock = blocks.find((b) => b.role === 'segment')
     const weightBlock = blocks.find((b) => b.role === 'weight')
 
-    const groups: DataGroup[] = questions.map((block) => ({
-      questionType: block.questionType,
-      columns: block.columns,
-      label: block.label || `${block.questionType} items`,
-      scaleRange: block.scaleRange,
-    }))
+    const groups: DataGroup[] = [
+      ...questions.map((block) => ({
+        format: block.format,
+        columns: block.columns,
+        label: block.label || `${block.format} items`,
+        scaleRange: block.scaleRange,
+      })),
+      ...behavioralBlocks.map((block) => ({
+        format: block.format,
+        columns: block.columns,
+        label: block.label || 'Behavioral data',
+      })),
+    ]
 
     const nodeId = 'node_' + Date.now()
-    const firstCol = questions[0]?.columns[0]
+    const firstCol = questions[0]?.columns[0] ?? behavioralBlocks[0]?.columns[0]
     const node: DatasetNode = {
       id: nodeId,
       label: 'Dataset',
@@ -110,8 +126,10 @@ export function DataWorkspace() {
       },
     })
 
-    // Propose tasks
-    const tasks = proposeTasks(blocks)
+    // Build analysis plan and propose tasks
+    const plan = buildAnalysisPlan(blocks)
+    setAnalysisPlan(plan)
+    const tasks = proposeTasksFromPlan(plan)
     setProposedTasks(tasks)
     setStep('review')
   }, [addNode, setActiveDatasetNode, logAction])
@@ -143,7 +161,7 @@ export function DataWorkspace() {
       const weightCol = weightBlock?.columns[0] ?? null
       const weightResult = extractWeights(
         weightCol,
-        questionBlocks.find((b) => b.role === 'question')?.columns[0]?.nRows ?? 0,
+        questionBlocks.find((b) => b.role === 'analyze')?.columns[0]?.nRows ?? 0,
         'anonymous', 'fp', 1, 'current'
       )
 
@@ -246,6 +264,8 @@ export function DataWorkspace() {
               sourceTaskId: task.id,
               sourceColumns: resolvedColumns.map((c) => c.name),
               sourceQuestionLabel: questionLabel,
+              crossType: task.crossType,
+              summaryLanguage: fi.summaryLanguage || fi.summary.split('. ')[0] + '.',
             }
             allFindings.push(finding)
             addFinding(finding)
@@ -288,6 +308,7 @@ export function DataWorkspace() {
     setRunResult(null)
     setTaskStepResults({})
     setAnalysisError(null)
+    setAnalysisPlan(null)
     setStep('blocks')
   }, [])
 
@@ -312,6 +333,19 @@ export function DataWorkspace() {
             <div className="analysis-error card">
               <strong>Error:</strong> {analysisError}
             </div>
+          )}
+          {analysisPlan && (
+            <AnalysisPlanCard
+              plan={analysisPlan}
+              onRun={(confirmedTier5) => {
+                // Mark confirmed Tier 5 tasks
+                const updated = proposedTasks.map((t) =>
+                  confirmedTier5.includes(t.id) ? { ...t, status: 'confirmed' as const } : t
+                )
+                handleTasksConfirmed(updated)
+              }}
+              onOpenExplorer={() => { setStep('results'); setResultsTab('explore') }}
+            />
           )}
           <TaskReview
             tasks={proposedTasks}

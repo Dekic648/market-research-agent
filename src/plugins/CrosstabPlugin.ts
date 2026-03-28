@@ -198,12 +198,17 @@ const CrosstabPlugin: AnalysisPlugin = {
           index: c.index,
         }))
       )
+      const summaryLanguage = highIndex.length > 0
+        ? `${ct.columnName} distribution varies across ${ct.segmentName} groups — "${highIndex[0]?.row}" is over-represented in "${highIndex[0]?.col}" (index ${highIndex[0]?.index.toFixed(0)}).`
+        : `${ct.columnName} distribution is fairly even across ${ct.segmentName} groups.`
+
       return {
         type: 'crosstab',
         title: `${ct.columnName} × ${ct.segmentName}`,
         summary: highIndex.length > 0
           ? `${highIndex.length} cell(s) over-indexed (>130). Strongest: "${highIndex[0]?.row}" in "${highIndex[0]?.col}" (index ${highIndex[0]?.index.toFixed(0)}).`
           : `No strong over-indexing detected across ${ct.colLabels.length} segments.`,
+        summaryLanguage,
         detail: JSON.stringify({ grandTotal: ct.grandTotal, nRows: ct.rowLabels.length, nCols: ct.colLabels.length }),
         significant: false,
         pValue: null,

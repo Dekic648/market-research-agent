@@ -558,7 +558,8 @@ export function checkPrefixedOrdinal(input: CheckInput): DetectionFlag | null {
   const { columnId, values } = input
   if (values.length < 3) return null
 
-  const PREFIX_PATTERN = /^\d+\)\s/
+  // Matches: "2) Minnow", "3) Dolphin", "4_marquis", "6_king", "0) NonPayer"
+  const PREFIX_PATTERN = /^\d+[)_]\s*/
 
   let matchCount = 0
   let checkedCount = 0

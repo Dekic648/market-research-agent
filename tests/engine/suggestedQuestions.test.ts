@@ -5,20 +5,28 @@ import { describe, it, expect } from 'vitest'
 import { generateSuggestedQuestions } from '../../src/engine/suggestedQuestions'
 import type { QuestionBlock, ColumnDefinition } from '../../src/types/dataTypes'
 
+const statTypeMap: Record<string, string> = {
+  rating: 'ordinal', matrix: 'ordinal', behavioral: 'continuous',
+  category: 'categorical', radio: 'categorical', checkbox: 'binary',
+  multi_response: 'multi_response', verbatim: 'text', timestamped: 'temporal', weight: 'ordinal',
+}
+
 function makeBlock(
-  id: string, label: string, type: QuestionBlock['questionType'],
+  id: string, label: string, type: QuestionBlock['format'],
   columns: Array<{ id: string; name: string }>
 ): QuestionBlock {
+  const colStatType = (statTypeMap[type] ?? 'ordinal') as any
   return {
-    id, label, questionType: type,
+    id, label, format: type, questionType: type,
     columns: columns.map((c) => ({
-      id: c.id, name: c.name, type,
+      id: c.id, name: c.name, format: type, type,
+      statisticalType: colStatType, role: 'analyze' as const,
       nRows: 100, nMissing: 0, nullMeaning: 'missing' as const,
       rawValues: Array.from({ length: 100 }, (_, i) => i * (Math.random() + 0.5)),
       fingerprint: null, semanticDetectionCache: null,
       transformStack: [], sensitivity: 'anonymous' as const, declaredScaleRange: null,
     })),
-    role: 'question',
+    role: 'analyze',
     confirmed: true,
     pastedAt: Date.now(),
   }

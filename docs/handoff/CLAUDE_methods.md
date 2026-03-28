@@ -6,7 +6,9 @@
 > When building a new plugin, find it here first — engine function, capabilities, preconditions.
 > When adding to the engine, add a stub here too.
 >
-> **Last updated:** 2026-03-28 — 18 plugins built, 675 tests passing
+> **Last updated:** 2026-03-28 — 22 plugins built, 771 tests passing
+>
+> **Standard Analysis Plan**: Five-tier waterfall (`buildAnalysisPlan()`) auto-proposes all analyses. Cross-type (survey × behavioral) proposals tagged with `crossType: true` on tasks and findings.
 
 ---
 
@@ -30,7 +32,8 @@ Each entry has:
 | `frequency` | `describe()`, `frequencies()` | built | auto | `categorical\|ordinal` | none | P1 |
 | `crosstab` | `crossTabulate()` | built | auto (with segment) | `categorical`, `segment` | none | P1 |
 | `multi_response` | `multiResponseFreq()` | planned | — | `multiple_response` | none | P1 |
-| `descriptives` | `describe()` | engine-only | — | `continuous` | none | P1 |
+| `descriptives` | `describe()` | built | auto (behavioral + high-nUnique continuous) | `continuous` | none | P1 |
+| `descriptives_summary` | `describe()` + frequency | built | auto (2+ ordinal columns) | `ordinal` | none | P1 |
 
 ---
 
@@ -38,6 +41,7 @@ Each entry has:
 
 | Plugin ID | Engine function | Status | Task wiring | requires | preconditions | Priority |
 |---|---|---|---|---|---|---|
+| `anova_oneway` | `anova()` / `welchAnova()` + `tukeyHSD()` | built | auto (continuous + segment, n>=30/group) | `continuous`, `segment` | shapiroWilk, leveneTest | P1 |
 | `kw_significance` | `kruskalWallis()` | built | auto (with segment) | `continuous\|ordinal`, `segment` | minGroupSize(5) | P1 |
 | `posthoc` | `mannWhitney()` | built | auto (depends on kw) | `continuous\|ordinal`, `segment` | depends on kw_significance | P1 |
 | `time_segment_comparison` | `kruskalWallis()` via groupByPeriod | built | cross-question (temporal × continuous) | `temporal`, `continuous` | 2–8 periods, ≥5 per period | P1 |
@@ -75,7 +79,7 @@ Each entry has:
 | `ordinal_regression` | `ordinalRegression()` | built | manual | `ordinal`, `n>30` | parallelLinesTest | P1 |
 | `mediation` | `mediation()` + `bootstrapIndirectEffect()` | built | cross-question (3 continuous) | `continuous`, `n>50` | none | P1 |
 | `moderation_analysis` | `moderation()` + `johnsonNeyman()` | built | manual | `continuous`, `n>50` | none | P1 |
-| `logistic_regression` | `logisticRegression()` | engine-only | — | `binary`, `n>50` | none | P1 |
+| `logistic_regression` | `logisticRegression()` + `kFoldCVLogistic()` + `computeAUC()` | built | cross-question (binary outcome) | `binary`, `n>50` | classBalance check | P1 |
 | `hierarchical_regression` | `linearRegression()` blocks | planned | — | `continuous`, `n>30` | vifCheck per block | P2 |
 | `poisson_regression` | `poissonRegression()` | engine-only | — | `count`, `n>30` | none | P3 |
 

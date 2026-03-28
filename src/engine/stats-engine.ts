@@ -7429,12 +7429,64 @@ import jStat from 'jstat'
   };
 
 /* ================================================================
+ *  TUKEY HSD — post-hoc pairwise comparisons for ANOVA
+ *  Uses normal approximation for the studentized range distribution.
+ * ================================================================ */
+
+function tukeyHSD(groups: number[][]): Array<{
+  groupA: number; groupB: number; meanDiff: number; se: number; q: number; p: number; significant: boolean
+}> {
+  const k = groups.length
+  const ns = groups.map((g) => g.length)
+  const means = groups.map((g) => mean(g))
+  const N = ns.reduce((s, n) => s + n, 0)
+
+  // Pooled MSW from one-way ANOVA
+  let SSW = 0
+  for (let i = 0; i < k; i++) {
+    const m = means[i]
+    for (const v of groups[i]) SSW += (v - m) * (v - m)
+  }
+  const dfWithin = N - k
+  const MSW = SSW / dfWithin
+
+  const results: Array<{
+    groupA: number; groupB: number; meanDiff: number; se: number; q: number; p: number; significant: boolean
+  }> = []
+
+  for (let i = 0; i < k; i++) {
+    for (let j = i + 1; j < k; j++) {
+      const diff = means[i] - means[j]
+      const seDiff = Math.sqrt(MSW * (1 / ns[i] + 1 / ns[j]) / 2)
+      const q = Math.abs(diff) / seDiff
+
+      // Normal approximation for Tukey p-value:
+      // p ≈ k * (1 - Φ(q / √2)) — conservative approximation
+      const z = q / Math.sqrt(2)
+      const pApprox = Math.min(1, k * 2 * (1 - jStat.normal.cdf(z, 0, 1)))
+
+      results.push({
+        groupA: i,
+        groupB: j,
+        meanDiff: diff,
+        se: seDiff,
+        q,
+        p: pApprox,
+        significant: pApprox < 0.05,
+      })
+    }
+  }
+
+  return results
+}
+
+/* ================================================================
  *  EXPORTS
  * ================================================================ */
 
 export {
   describe, detectType,
-  ttest, pairedTTest, anova, welchAnova, repeatedMeasuresAnova, twoWayAnova, ancova,
+  ttest, pairedTTest, anova, welchAnova, repeatedMeasuresAnova, twoWayAnova, ancova, tukeyHSD,
   mannWhitney, wilcoxon, kruskalWallis, friedman,
   chiSquare, fisherExact, mcnemar, twoProportionZ,
   shapiroWilk, levene,
@@ -7449,7 +7501,7 @@ export {
   conjointAnalysis, maxDiff, discreteChoice, latentClassAnalysis,
   cfa, irt, mixedEffects,
   survivalAnalysis, multipleImputation, decisionTree,
-  dummyCode, cooksDistance, kFoldCVLinear, kFoldCVLogistic,
+  dummyCode, cooksDistance, kFoldCVLinear, kFoldCVLogistic, computeAUC,
   parallelLinesTest, bootstrapIndirectEffect, johnsonNeyman,
   powerTTest, powerANOVA, powerCorrelation, powerChiSq,
   interpret, STOPWORDS, SENTIMENT_LEXICON,

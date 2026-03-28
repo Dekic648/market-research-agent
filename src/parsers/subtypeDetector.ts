@@ -80,8 +80,9 @@ export function detectCategorySubtype(
     return 'constant'
   }
 
-  // prefixed_ordinal: >70% values match /^\d+\)\s/
-  const PREFIX_PATTERN = /^\d+\)\s/
+  // prefixed_ordinal: >70% values match digit prefix patterns
+  // Matches: "2) Minnow", "3) Dolphin", "4_marquis", "6_king", "0) NonPayer"
+  const PREFIX_PATTERN = /^\d+[)_]\s*/
   let matchCount = 0
   let checkedCount = 0
   for (let i = 0; i < Math.min(values.length, 100); i++) {

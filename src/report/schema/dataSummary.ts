@@ -3,7 +3,7 @@
  * Used by DataSummaryCard for orientation before analysis.
  */
 
-import type { QuestionBlock, QuestionType } from '../../types/dataTypes'
+import type { QuestionBlock, QuestionFormat } from '../../types/dataTypes'
 import { parseTimestamp } from '../../engine/timeUtils'
 
 export interface DataFamily {
@@ -58,7 +58,7 @@ export function buildDataSummary(
   // Group blocks by family
   const familyMap = new Map<string, QuestionBlock[]>()
   for (const block of confirmed) {
-    const family = TYPE_FAMILIES[block.questionType] ?? 'Other'
+    const family = TYPE_FAMILIES[block.format] ?? 'Other'
     if (!familyMap.has(family)) familyMap.set(family, [])
     familyMap.get(family)!.push(block)
   }
@@ -85,7 +85,7 @@ export function buildDataSummary(
     if (familyName === 'Survey questions') {
       const subtypeCounts = new Map<string, number>()
       for (const block of familyBlocks) {
-        const subLabel = SURVEY_SUBTYPE_LABELS[block.questionType] ?? block.questionType
+        const subLabel = SURVEY_SUBTYPE_LABELS[block.format] ?? block.format
         subtypeCounts.set(subLabel, (subtypeCounts.get(subLabel) ?? 0) + block.columns.length)
       }
       family.subgroups = Array.from(subtypeCounts.entries())

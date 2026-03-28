@@ -21,10 +21,19 @@ import '../../src/plugins/CorrelationPlugin'
 import '../../src/plugins/PointBiserialPlugin'
 import '../../src/plugins/SegmentProfilePlugin'
 
-function makeCol(id: string, name: string, type: ColumnDefinition['type'], values: (number | string | null)[]): ColumnDefinition {
+const statTypeMap: Record<string, string> = {
+  rating: 'ordinal', matrix: 'ordinal', behavioral: 'continuous',
+  category: 'categorical', radio: 'categorical', checkbox: 'binary',
+  multi_response: 'multi_response', verbatim: 'text', timestamped: 'temporal', weight: 'ordinal',
+}
+
+function makeCol(id: string, name: string, type: ColumnDefinition['format'], values: (number | string | null)[]): ColumnDefinition {
+  const colStatType = (statTypeMap[type] ?? 'ordinal') as any
   return {
-    id, name, type, nRows: values.length,
+    id, name, format: type, type, statisticalType: colStatType, role: 'analyze',
+    nRows: values.length,
     nMissing: values.filter(v => v === null).length,
+    nullMeaning: 'missing',
     rawValues: values, fingerprint: null, semanticDetectionCache: null,
     transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
   }
@@ -36,15 +45,19 @@ const q2 = Array.from({ length: n }, (_, i) => ((i + 1) % 5) + 1)
 const q3 = Array.from({ length: n }, (_, i) => ((i + 2) % 5) + 1)
 const seg = Array.from({ length: n }, (_, i) => i < 25 ? 'A' : 'B')
 
+const segCol = makeCol('seg', 'Segment', 'category', seg)
+segCol.role = 'segment'
+
 const node: DatasetNode = {
   id: 'n1', label: 'Test',
   parsedData: {
     groups: [{
+      format: 'rating',
       questionType: 'rating',
       columns: [makeCol('q1', 'Q1', 'rating', q1), makeCol('q2', 'Q2', 'rating', q2), makeCol('q3', 'Q3', 'rating', q3)],
       label: 'Scale',
     }],
-    segments: makeCol('seg', 'Segment', 'category', seg),
+    segments: segCol,
   },
   rowCount: 50, weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
 }

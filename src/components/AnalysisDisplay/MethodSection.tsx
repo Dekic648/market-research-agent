@@ -5,16 +5,19 @@
 
 import { useState, useEffect } from 'react'
 import { ResultQuestionBlock } from './ResultQuestionBlock'
+import { SectionSummaryCard } from './SectionSummaryCard'
 import type { MethodSectionData } from '../../results/groupFindings'
+import type { Finding } from '../../types/dataTypes'
 
 interface MethodSectionProps {
   section: MethodSectionData
   defaultOpen: boolean
   /** When this changes, force all sections to the given state */
   forceState?: { collapsed: boolean; key: number }
+  onOpenTLDR?: () => void
 }
 
-export function MethodSection({ section, defaultOpen, forceState }: MethodSectionProps) {
+export function MethodSection({ section, defaultOpen, forceState, onOpenTLDR }: MethodSectionProps) {
   const [open, setOpen] = useState(defaultOpen)
 
   useEffect(() => {
@@ -44,6 +47,11 @@ export function MethodSection({ section, defaultOpen, forceState }: MethodSectio
               collapsible={collapsibleBlocks}
             />
           ))}
+          {/* Section summary — top findings in plain language */}
+          <SectionSummaryCard
+            findings={section.questionGroups.flatMap((g) => g.findings) as Finding[]}
+            onOpenTLDR={onOpenTLDR}
+          />
         </div>
       )}
     </div>

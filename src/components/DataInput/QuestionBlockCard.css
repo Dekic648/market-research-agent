@@ -278,6 +278,22 @@
   margin-bottom: 12px;
 }
 
+/* Matrix grid suggestion */
+.qb-matrix-suggestion {
+  padding: 12px;
+  background: var(--teal-bg);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--teal);
+  margin-bottom: 12px;
+}
+
+.qb-matrix-suggestion p {
+  font-size: 13px;
+  color: var(--teal-text);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
 /* Nominal-integer warning */
 .qb-nominal-warning {
   padding: 12px;
@@ -428,4 +444,126 @@
   background: var(--bg-card);
   border-radius: var(--radius);
   border: 1px solid var(--border-light);
+}
+
+/* Behavioral block role assignment */
+.qb-behavioral-roles {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-light);
+}
+
+.qb-behavioral-header {
+  margin-bottom: 10px;
+}
+
+.qb-behavioral-header strong {
+  font-size: 13px;
+}
+
+.qb-behavioral-subtitle {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.qb-role-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.qb-role-table th {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--border);
+}
+
+.qb-role-row td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.qb-role-col-name {
+  font-weight: 500;
+}
+
+.qb-type-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.qb-type-chip-behavioral {
+  background: var(--purple-bg);
+  color: var(--purple-text);
+}
+
+.qb-type-chip-rating {
+  background: var(--teal-bg);
+  color: var(--teal-text);
+}
+
+.qb-type-chip-category {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.qb-role-toggle {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+}
+
+.qb-role-metric {
+  background: var(--purple-bg);
+  color: var(--purple-text);
+  border-color: var(--purple-text);
+}
+
+.qb-role-dimension {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.qb-role-toggle:hover {
+  opacity: 0.8;
+}
+
+/* Segment continuous warning */
+.qb-segment-continuous-warning {
+  padding: 12px 16px;
+  background: var(--amber-bg);
+  border-left: 3px solid var(--amber);
+  margin: 0 16px 8px;
+  border-radius: var(--radius);
+}
+
+.qb-segment-continuous-warning strong {
+  font-size: 12px;
+  color: var(--amber-text);
+}
+
+.qb-segment-continuous-warning ul {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--amber-text);
+}
+
+.qb-segment-continuous-warning p {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
 }

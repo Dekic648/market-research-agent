@@ -1,10 +1,55 @@
-# CLAUDE.md — v7
+# CLAUDE.md — v12
 ## Market Research Agent — Current State
 
 > **Last updated:** 2026-03-28
-> **Test count:** 685 passing across 52 test files
-> **Plugins:** 18 built and registered
+> **Test count:** 788 passing across 61 test files
+> **Plugins:** 22 built and registered
 > **Deploy:** Vercel at market-research-agent-iota.vercel.app
+
+---
+
+## Two product modes (v11)
+
+| Mode | Entry point | Flow |
+|---|---|---|
+| **Auto (Standard Plan)** | Paste data → Plan card → Run → Results → Report | `buildAnalysisPlan()` generates five-tier waterfall. No manual config needed. |
+| **Explorer (manual)** | Always-visible "Use Explorer →" link | `ExplorerPanel` — pick columns, run any analysis, pin to report. |
+
+### Five-tier analysis plan (`src/engine/analysisPlan.ts`)
+
+| Tier | Label | Eligible when | Key plugins |
+|---|---|---|---|
+| 1 | Distributions | Always | frequency, descriptives, descriptives_summary |
+| 2 | Group Comparisons | Segment/dimension column present | kw_significance, anova_oneway, crosstab, segment_profile |
+| 3 | Relationships | 2+ analyzable columns | correlation (Pearson/Spearman auto), cronbach, efa |
+| 4 | Prediction | Outcome auto-detected | driver_analysis, regression, logistic_regression |
+| 5 | Advanced | Always (requires confirmation) | mediation, moderation, power_analysis |
+
+- `buildAnalysisPlan(blocks)` → `AnalysisPlan` (pure function, no store imports)
+- `proposeTasksFromPlan(plan)` → `AnalysisTask[]` (Tier 5 tasks excluded unless confirmed)
+- `AnalysisPlanCard` component shows plan before execution
+- **Cross-type badge**: `Survey × Behavioral` teal pill on findings from mixed-data analyses
+- `crossType?: boolean` on both `AnalysisTask` and `Finding`
+
+---
+
+## Three-axis type model (v10)
+
+Column classification uses three independent axes:
+
+| Axis | Type | Purpose | Field on ColumnDefinition |
+|---|---|---|---|
+| **Format** | `QuestionFormat` | How data was collected (survey design) | `format` |
+| **Statistical** | `StatisticalType` | What the engine sees (drives CapabilityMatcher) | `statisticalType` |
+| **Role** | `ColumnRole` | What the column is used for in analysis | `role` |
+
+**QuestionFormat** values: `rating`, `matrix`, `checkbox`, `radio`, `category`, `behavioral`, `verbatim`, `timestamped`, `multi_assigned`, `multi_response`, `weight`
+
+**StatisticalType** values: `ordinal`, `continuous`, `categorical`, `binary`, `multi_response`, `text`, `temporal`, `count`, `spend`, `proportion`, `prefixed_ordinal`, `constant`, `geo`
+
+**ColumnRole** values: `analyze`, `segment`, `metric`, `dimension`, `weight`, `unused`
+
+`QuestionType` is a deprecated alias for `QuestionFormat`. Old fields (`type`, `subtype`, `behavioralSubtype`, `categorySubtype`, `behavioralRole`, `questionType`) are kept as optional deprecated on interfaces — will be removed in a future session.
 
 ---
 
@@ -14,6 +59,7 @@
 
 | Plugin ID | Title | Status | Task wiring | Priority |
 |---|---|---|---|---|
+| `descriptives` | Descriptive Statistics | built | auto (behavioral + high-nUnique) | P1 |
 | `frequency` | Frequency Distribution | built | auto | P1 |
 | `crosstab` | Cross-tabulation | built | auto (with segment) | P1 |
 | `kw_significance` | Significance Testing (KW) | built | auto (with segment) | P1 |
@@ -32,6 +78,9 @@
 | `mediation` | Mediation Analysis | built | cross-question (3 continuous) | P1 |
 | `moderation_analysis` | Moderation Analysis | built | manual | P1 |
 | `power_analysis` | Power Calculator | built | manual-only (never auto) | P1 |
+| `descriptives_summary` | Summary Statistics Table | built | auto (2+ ordinal columns) | P1 |
+| `logistic_regression` | Logistic Regression | built | cross-question (binary outcome) | P1 |
+| `anova_oneway` | One-way ANOVA | built | auto (continuous + segment) | P1 |
 
 ### Engine layer
 
@@ -40,7 +89,7 @@
 | `stats-engine.ts` | ~7100 lines, 60+ statistical functions including linearRegression, logisticRegression, ordinalRegression, mediation, moderation, kFoldCVLinear, kFoldCVLogistic, parallelLinesTest, bootstrapIndirectEffect, johnsonNeyman, powerTTest/ANOVA/Correlation/ChiSq, cooksDistance, multipleImputation |
 | `resolveColumn.ts` | Transform pipeline (9 transform types + auto-median imputation for ≤5% missing) |
 | `CapabilityMatcher.ts` | Column types → DataCapability set resolution |
-| `TaskProposer.ts` | 3-pass proposal engine — within-question + cross-question + cross-type bridge + dependency wiring |
+| `TaskProposer.ts` | 3-pass proposal engine — within-question + cross-question + cross-type bridge + dependency wiring. `allAnalyzable` = question blocks + behavioral block metrics. Dimension columns from behavioral blocks serve as splits. |
 | `PostAnalysisVerifier.ts` | Simpson's Paradox + moderation detection after findings |
 | `effectSizeLabels.ts` | Cohen's d, r, R², Cramér's V, ε² magnitude labels |
 | `temporalAnalysis.ts` | trendOverTime, groupByPeriod, detectGranularity |
@@ -68,7 +117,7 @@
 
 | Area | Components |
 |---|---|
-| Data Input | DataWorkspace, QuestionBlockEntry, QuestionBlockCard, BulkTaggerTable, PasteGrid, TaskReview, ColumnTagger |
+| Data Input | DataWorkspace, QuestionBlockEntry (+ Add Behavioral Data), QuestionBlockCard (per-column role toggles), BulkTaggerTable (role column), PasteGrid, TaskReview, ColumnTagger |
 | Data Preparation | PrepWorkspace, MissingDataPanel, RecodePanel, WeightCalculator, DataSummaryCard |
 | Analysis Display | AnalysisResults (method-grouped), ResultsPageHeader, FlagsStrip, MethodSection, ResultQuestionBlock, StepCard (interactive mode), FindingCard, PlainLanguageCard, MetricsRow, DataTable |
 | Results Grouping | `src/results/methodGroups.ts` (METHOD_GROUPS constant), `src/results/groupFindings.ts` (pure grouping function) |
@@ -217,6 +266,15 @@ Unchanged. Each adapter requires sample data files before building.
 - Wired into both HeadlessRunner and InteractiveRunner
 - `attachVerificationResult()` on FindingsStore
 
+### Two-layer language system (v12)
+- **plainLanguage** — detailed, for finding cards in results view. May include test names, effect sizes, caveats.
+- **summaryLanguage** — punchy 1-2 sentences for TLDR and report. No test names, no Greek letters, no p-values. Names actual columns, gives one key number.
+- `summaryLanguage: string` on Finding — populated by each plugin, falls back to first sentence of summary
+- TLDRReport rewritten: assembled from summaryLanguage, sorted by effect size, grouped by METHOD_GROUPS section. Mini-charts inline (160px). Key metric pills. Copy per finding + Copy All buttons.
+- `assembleTLDR()` pure function — filters by significance/effect threshold, sorts DESC, groups by method section
+- `SectionSummaryCard` below each MethodSection in results — shows top 1-2 summaryLanguage strings with "See executive summary" link
+- Cross-type badge ("Survey × Behavioral") on TLDR findings with crossType: true
+
 ### Plain language and report
 - All 18 plugin `plainLanguage()` methods rewritten for researcher readability
 - Effect size magnitude labels
@@ -252,6 +310,34 @@ Unchanged. Each adapter requires sample data files before building.
 - `ResultsPageHeader` — collapse/expand all toggle + total counts
 - Finding enrichment: `sourceTaskId`, `sourceColumns`, `sourceQuestionLabel` on Finding type (populated in DataWorkspace)
 - `StepCard` component preserved — still used for InteractiveRunner step-by-step mode
+
+### Behavioral analysis improvements (data-shape-aware method selection)
+- **DescriptivesPlugin** (plugin #19): histogram + box plot + describe() for behavioral metrics. Detects skew and zero-inflation. Auto-proposed for behavioral columns in TaskProposer Pass 1.
+- **CorrelationPlugin**: auto-switches to Spearman rank correlation when any column has |skewness| > 2. Notes method in findings and plain language.
+- **SegmentProfilePlugin**: computes median + nonZeroRate per group for skewed/zero-inflated columns. Charts switch to median. Plain language leads with conversion rate.
+- **RegressionPlugin**: applies log1p to spend outcomes with |skewness| > 2. Warns for all skewed outcomes. Notes transformation in flags and plain language.
+- **Known gaps documented in** `docs/handoff/BEHAVIORAL_ANALYSIS_GAPS.md`: Poisson regression for counts, two-part hurdle model for spend, percentile segmentation, box plot comparison charts.
+
+### Alchemer checkbox grid support
+- New QuestionType `'multi_response'` — checkbox grid where each column is one option (code if selected, null if not)
+- `isAlchemerCheckboxColumn()` and `isAlchemerCheckboxGrid()` in `inferColumnType.ts` — detects high-null, single-code-value columns with shared prefix
+- Auto-detection in QuestionBlockCard: 3+ columns matching pattern → prompt "Looks like a checkbox grid"
+- `resolveColumn()` normalizes Alchemer format: non-null → 1, null → 0 (rawValues immutable, normalization in resolved output only)
+- `nullMeaning` auto-set to `'not_chosen'` — MissingDataPanel and MICE exclude these columns
+- `CapabilityMatcher` emits `'multiple_response'` + `'categorical'` for `multi_response` columns
+- `WITHIN_QUESTION_RULES.multi_response`: allows frequency + crosstab, blocks regression/correlation/cronbach/efa/KW/mediation/moderation/point-biserial
+- Type picker: "Checkbox or Yes/No" relabeled, "Checkbox grid (select all that apply)" added to SELECTABLE_TYPES
+
+### Behavioral Dataset block
+- New block role: `'behavioral'` alongside `'question'`, `'segment'`, `'weight'`
+- `behavioralRole?: 'metric' | 'dimension'` on `ColumnDefinition` — determines whether a column is analyzed or used as split
+- `+ Add Behavioral Data` button in QuestionBlockEntry creates a behavioral block
+- Per-column type inference via `inferColumnType()` runs on paste — sets type and default role
+- Per-column role toggle (Metric / Dimension) in QuestionBlockCard for behavioral blocks
+- `setBehavioralRole()` store action on datasetGraph for post-confirmation changes
+- BulkTaggerTable extended: Role toggle column shown when behavioral blocks present, "Mark all continuous as Metric" bulk action
+- TaskProposer refactored: `allAnalyzable` = question blocks + metric columns from behavioral blocks. Segment blocks excluded from allAnalyzable entirely. Dimension columns from behavioral blocks available as split variables.
+- Segment block continuous column warning: when inferColumnType detects continuous columns in a segment block, shows inline warning suggesting Behavioral block instead
 
 ### UI improvements
 - FindingCard restructured: headline → key metrics → collapsed stats → flags
