@@ -1,12 +1,13 @@
 /**
  * QuestionBlockEntry — multi-box container managing QuestionBlock[].
  *
- * Each question gets its own paste box. User adds boxes as needed.
- * "Confirm All →" converts blocks to the analysis pipeline.
+ * For < 8 columns: individual QuestionBlockCard per column
+ * For 8+ columns: BulkTaggerTable with compact table view
  */
 
 import { useState, useCallback } from 'react'
 import { QuestionBlockCard } from './QuestionBlockCard'
+import { BulkTaggerTable, getDetectionConfidence } from './BulkTaggerTable'
 import type { QuestionBlock } from '../../types/dataTypes'
 import './QuestionBlockEntry.css'
 
@@ -63,38 +64,66 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
   const hasSegment = blocks.some((b) => b.role === 'segment')
   const questionCount = blocks.filter((b) => b.role === 'question' && b.columns.length > 0).length
 
+  // Bulk mode: 8+ columns with data
+  const isBulkMode = blocksWithData.length >= 8
+
+  // Auto-confirm high-confidence blocks (for bulk mode initial state)
+  const handleBulkConfirmAll = useCallback(() => {
+    setBlocks((prev) =>
+      prev.map((block) => {
+        if (block.columns.length === 0 || block.confirmed) return block
+        if (getDetectionConfidence(block) === 'high') {
+          return { ...block, confirmed: true }
+        }
+        return block
+      })
+    )
+  }, [])
+
   return (
     <div className="qb-entry">
       <div className="qb-entry-header">
-        <h2>Add Your Questions</h2>
-        <p>Paste each question's data in its own box. Matrix grids and checkbox groups stay together as one question.</p>
+        <h2>{isBulkMode ? 'Review Column Types' : 'Add Your Questions'}</h2>
+        {!isBulkMode && (
+          <p>Paste each question's data in its own box. Matrix grids and checkbox groups stay together as one question.</p>
+        )}
       </div>
 
-      <div className="qb-list">
-        {blocks.map((block, i) => {
-          const displayIndex = block.role === 'question'
-            ? blocks.filter((b, j) => j <= i && b.role === 'question').length
-            : undefined
-          return (
-            <QuestionBlockCard
-              key={block.id}
-              block={block}
-              index={displayIndex ?? 0}
-              onUpdate={(updated) => updateBlock(i, updated)}
-              onRemove={() => removeBlock(i)}
-            />
-          )
-        })}
-      </div>
+      {isBulkMode ? (
+        <BulkTaggerTable
+          blocks={blocks}
+          onUpdateBlock={updateBlock}
+          onConfirmAll={handleBulkConfirmAll}
+        />
+      ) : (
+        <>
+          <div className="qb-list">
+            {blocks.map((block, i) => {
+              const displayIndex = block.role === 'question'
+                ? blocks.filter((b, j) => j <= i && b.role === 'question').length
+                : undefined
+              return (
+                <QuestionBlockCard
+                  key={block.id}
+                  block={block}
+                  index={displayIndex ?? 0}
+                  onUpdate={(updated) => updateBlock(i, updated)}
+                  onRemove={() => removeBlock(i)}
+                />
+              )
+            })}
+          </div>
 
-      <div className="qb-actions">
-        <button className="btn btn-secondary" onClick={addBlock}>
-          + Add Question
-        </button>
-        <button className="btn btn-secondary" onClick={addSegmentBlock}>
-          + Add Segment
-        </button>
-      </div>
+          <div className="qb-actions">
+            <button className="btn btn-secondary" onClick={addBlock}>
+              + Add Question
+            </button>
+            <button className="btn btn-secondary" onClick={addSegmentBlock}>
+              + Add Segment
+            </button>
+          </div>
+        </>
+      )}
 
       <div className="qb-footer card">
         <div className="qb-footer-stats">

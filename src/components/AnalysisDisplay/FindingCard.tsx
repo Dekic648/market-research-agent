@@ -28,6 +28,13 @@ interface KeyMetric {
   value: string
 }
 
+interface SubgroupContext {
+  label: string
+  condition: string
+  n: number
+  totalN: number
+}
+
 interface FindingCardProps {
   title: string
   summary: string
@@ -37,6 +44,9 @@ interface FindingCardProps {
   effectLabel: string | null
   flags?: FindingFlag[]
   verificationResults?: VerificationResult[]
+  subgroupContext?: SubgroupContext | null
+  cvR2?: number | null
+  weightedBy?: string
   onSuppress?: () => void
 }
 
@@ -51,6 +61,13 @@ function extractKeyMetrics(props: FindingCardProps): KeyMetric[] {
     metrics.push({ label: 'p-value', value: props.pValue < 0.001 ? '< .001' : props.pValue.toFixed(3) })
   }
 
+  // Show CV R² alongside training R² when available
+  if (props.cvR2 !== null && props.cvR2 !== undefined && props.effectSize !== null) {
+    metrics.push({ label: 'Training R²', value: props.effectSize.toFixed(3) })
+    metrics.push({ label: 'CV R²', value: props.cvR2.toFixed(3) })
+    return metrics.slice(0, 3)
+  }
+
   if (props.effectSize !== null && typeof props.effectSize === 'number') {
     metrics.push({ label: 'Effect size', value: props.effectSize.toFixed(3) })
   }
@@ -59,13 +76,27 @@ function extractKeyMetrics(props: FindingCardProps): KeyMetric[] {
 }
 
 export function FindingCard({
-  title, summary, significant, pValue, effectSize, effectLabel, flags, verificationResults, onSuppress,
+  title, summary, significant, pValue, effectSize, effectLabel, flags, verificationResults, subgroupContext, onSuppress,
 }: FindingCardProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const keyMetrics = extractKeyMetrics({ title, summary, significant, pValue, effectSize, effectLabel })
 
   return (
     <div className={`finding-card ${significant ? 'finding-sig' : 'finding-ns'}`}>
+      {/* Subgroup badge */}
+      {subgroupContext && (
+        <div className="finding-subgroup-badge">
+          {subgroupContext.label} only — n={subgroupContext.n} of {subgroupContext.totalN}
+        </div>
+      )}
+
+      {/* Weighted badge */}
+      {weightedBy && (
+        <div className="finding-weighted-badge">
+          Weighted by {weightedBy}
+        </div>
+      )}
+
       {/* Zone 1 — Plain language headline */}
       <div className="finding-headline">
         <span className={`finding-badge ${significant ? 'badge-teal' : 'badge-amber'}`}>

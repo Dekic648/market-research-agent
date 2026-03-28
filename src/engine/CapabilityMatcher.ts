@@ -69,6 +69,7 @@ export const CapabilityMatcher = {
     }
     if (typeCounts['timestamped']) {
       caps.add('temporal')
+      caps.add('continuous')
     }
     if (typeCounts['multi_assigned']) {
       caps.add('multiple_response')
@@ -156,6 +157,7 @@ export const CapabilityMatcher = {
           break
         case 'timestamped':
           caps.add('temporal')
+          caps.add('continuous')
           break
         case 'multi_assigned':
           caps.add('multiple_response')

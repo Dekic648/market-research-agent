@@ -24,6 +24,7 @@ import { useChartStore } from '../../stores/chartStore'
 import { resolveColumn } from '../../engine/resolveColumn'
 import { AnalysisRegistry } from '../../plugins/AnalysisRegistry'
 import { HeadlessRunner } from '../../runners/HeadlessRunner'
+import { extractWeights } from '../../engine/weightExtractor'
 import { proposeTasks } from '../../engine/TaskProposer'
 import type { RunResult } from '../../runners/IStepRunner'
 
@@ -62,6 +63,7 @@ export function DataWorkspace() {
     // Store dataset node for the store system
     const questions = blocks.filter((b) => b.role === 'question')
     const segBlock = blocks.find((b) => b.role === 'segment')
+    const weightBlock = blocks.find((b) => b.role === 'weight')
 
     const groups: DataGroup[] = questions.map((block) => ({
       questionType: block.questionType,
@@ -80,7 +82,7 @@ export function DataWorkspace() {
         segments: segBlock?.columns[0],
       },
       rowCount: firstCol?.nRows ?? 0,
-      weights: null,
+      weights: weightBlock?.columns[0] ?? null,
       readonly: false,
       source: 'user',
       dataVersion: 1,
@@ -131,6 +133,15 @@ export function DataWorkspace() {
       // Build a lookup from questionBlockId → block
       const blockMap = new Map(questionBlocks.map((b) => [b.id, b]))
 
+      // Extract weights if a weight block exists
+      const weightBlock = questionBlocks.find((b) => b.role === 'weight')
+      const weightCol = weightBlock?.columns[0] ?? null
+      const weightResult = extractWeights(
+        weightCol,
+        questionBlocks.find((b) => b.role === 'question')?.columns[0]?.nRows ?? 0,
+        'anonymous', 'fp', 1, 'current'
+      )
+
       // Execute tasks in order (respecting dependsOn)
       const executed = new Set<string>()
 
@@ -160,7 +171,7 @@ export function DataWorkspace() {
             const block = blockMap.get(ref.questionBlockId)
             const col = block?.columns.find((c) => c.id === ref.columnId)
             if (!col) return null
-            return { id: col.id, name: col.name, values: resolveColumn(col) }
+            return { id: col.id, name: col.name, values: resolveColumn(col), nullMeaning: col.nullMeaning }
           })
           .filter((c): c is NonNullable<typeof c> => c !== null)
 
@@ -187,12 +198,16 @@ export function DataWorkspace() {
           columns: resolvedColumns,
           segment: resolvedSegment,
           n: resolvedColumns[0]?.values.length ?? 0,
+          rowCount: resolvedColumns[0]?.values.length ?? 0,
+          weights: weightResult.weights,
+          weightColumnName: weightResult.weightColumnName,
         }
 
         const fp = resolvedColumns[0]?.id ?? 'unknown'
 
         const runner = new HeadlessRunner({
           data,
+          weights: weightResult.weights,
           userId: 'anonymous',
           dataFingerprint: fp,
           dataVersion: 1,
@@ -215,6 +230,7 @@ export function DataWorkspace() {
               createdAt: Date.now(),
               dataVersion: 1,
               dataFingerprint: fp,
+              weightedBy: weightResult.weightColumnName,
             }
             allFindings.push(finding)
             addFinding(finding)

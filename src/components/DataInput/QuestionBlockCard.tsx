@@ -9,10 +9,12 @@
  */
 
 import { useState, useCallback, useRef } from 'react'
-import type { QuestionBlock, QuestionType } from '../../types/dataTypes'
+import type { QuestionBlock, QuestionType, NullMeaning, ColumnDefinition, SubgroupFilter } from '../../types/dataTypes'
 import { PasteGridAdapter } from '../../parsers/adapters/PasteGridAdapter'
 import { computeFingerprint } from '../../parsers/fingerprint'
 import { detectBehavioralSubtype, detectCategorySubtype } from '../../parsers/subtypeDetector'
+import { detectRoutingSource, type RoutingMatch } from '../../detection/routingDetector'
+import { formatOperator } from '../../engine/subgroupFilter'
 import { TYPE_DESCRIPTIONS, SELECTABLE_TYPES } from './columnTypeDescriptions'
 import './QuestionBlockCard.css'
 
@@ -21,12 +23,18 @@ interface QuestionBlockCardProps {
   index: number
   onUpdate: (block: QuestionBlock) => void
   onRemove: () => void
+  /** All confirmed columns across all blocks — for routing detection */
+  allConfirmedColumns?: ColumnDefinition[]
+  /** Callback to apply detected routing as subgroup filter */
+  onApplyRoutingSubgroup?: (filter: SubgroupFilter) => void
 }
 
-export function QuestionBlockCard({ block, index, onUpdate, onRemove }: QuestionBlockCardProps) {
+export function QuestionBlockCard({ block, index, onUpdate, onRemove, allConfirmedColumns, onApplyRoutingSubgroup }: QuestionBlockCardProps) {
   const [rawText, setRawText] = useState('')
   const [showTypeSelector, setShowTypeSelector] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [routingMatch, setRoutingMatch] = useState<RoutingMatch | null>(null)
+  const [routingDismissed, setRoutingDismissed] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const hasParsedData = block.columns.length > 0
@@ -57,12 +65,15 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
         const parsed = PasteGridAdapter.parse(text)
         const columns = parsed.columns.map((col) => {
           const fp = computeFingerprint(col.values, `${block.id}_${col.id}`)
+          const nullMeaning: NullMeaning = (block.questionType === 'checkbox' || block.questionType === 'multi_assigned')
+            ? 'not_chosen' : 'missing'
           const colDef = {
             id: `${block.id}_${col.id}`,
             name: col.name,
             type: block.questionType,
             nRows: col.values.length,
             nMissing: col.values.filter((v: unknown) => v === null).length,
+            nullMeaning,
             rawValues: col.values,
             fingerprint: fp,
             semanticDetectionCache: null,
@@ -126,6 +137,63 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
     setShowTypeSelector(false)
   }, [block, onUpdate])
 
+  // Routing detection: high null rate on non-checkbox columns
+  const nullRate = hasParsedData && block.columns[0]
+    ? block.columns[0].nMissing / block.columns[0].nRows : 0
+  const showRoutingPrompt = hasParsedData
+    && !block.confirmed
+    && nullRate > 0.3
+    && block.questionType !== 'checkbox'
+    && block.questionType !== 'multi_assigned'
+    && block.columns[0]?.nullMeaning === 'missing'
+
+  const handleRoutingChoice = useCallback((isConditional: boolean) => {
+    if (isConditional) {
+      const updated = {
+        ...block,
+        columns: block.columns.map((c) => ({ ...c, nullMeaning: 'not_asked' as NullMeaning })),
+      }
+      onUpdate(updated)
+
+      // Run routing source detection
+      if (allConfirmedColumns && block.columns[0]) {
+        const match = detectRoutingSource(
+          block.columns[0],
+          allConfirmedColumns,
+          block.columns[0].nRows
+        )
+        setRoutingMatch(match)
+        setRoutingDismissed(false)
+      }
+    }
+    // If not conditional, nullMeaning stays 'missing' — just dismiss
+  }, [block, onUpdate, allConfirmedColumns])
+
+  const handleApplyRouting = useCallback(() => {
+    if (!routingMatch || !onApplyRoutingSubgroup) return
+    const filter: SubgroupFilter = {
+      id: `routing_${Date.now()}`,
+      label: routingMatch.suggestedLabel,
+      columnId: routingMatch.sourceColumnId,
+      operator: routingMatch.operator,
+      value: routingMatch.threshold,
+      effectiveN: routingMatch.effectiveN,
+      source: 'auto',
+    }
+    onApplyRoutingSubgroup(filter)
+    setRoutingMatch(null)
+  }, [routingMatch, onApplyRoutingSubgroup])
+
+  const handleIgnoreRouting = useCallback(() => {
+    setRoutingDismissed(true)
+  }, [])
+
+  const nullSemanticNote = block.columns[0]?.nullMeaning === 'not_chosen'
+    ? 'Empty cells = not selected (counted in totals)'
+    : block.columns[0]?.nullMeaning === 'not_asked'
+      ? 'Empty cells = question not shown to this respondent'
+      : 'Empty cells = no response recorded'
+
   const roleLabel = block.role === 'segment' ? 'SEGMENT' : block.role === 'weight' ? 'WEIGHT' : null
   const isOrdinal = block.questionType === 'rating' || block.questionType === 'matrix'
 
@@ -181,8 +249,18 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
             <div className="qb-preview-stats">
               <span className="badge badge-teal">{block.columns[0]?.nRows ?? 0} rows</span>
               <span className="badge badge-purple">{block.columns.length} col{block.columns.length !== 1 ? 's' : ''}</span>
-              {block.columns[0]?.nMissing > 0 && (
-                <span className="badge badge-amber">{block.columns[0].nMissing} missing</span>
+              {block.columns[0]?.nMissing > 0 && !block.columns[0]?.imputedValues && (() => {
+                const col = block.columns[0]
+                const autoMedian = col.nullMeaning === 'missing'
+                  && !col.imputedValues
+                  && (col.type === 'behavioral' || col.type === 'rating' || col.type === 'matrix')
+                  && col.nMissing / col.nRows <= 0.05
+                return autoMedian
+                  ? <span className="badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-faint)', fontSize: '10px' }}>{col.nMissing} values will be estimated — median</span>
+                  : <span className="badge badge-amber">{col.nMissing} missing</span>
+              })()}
+              {block.columns[0]?.imputedValues && (
+                <span className="badge badge-purple">MICE imputed — {block.columns[0].nMissing} values estimated</span>
               )}
             </div>
             <div className="qb-preview-grid">
@@ -246,6 +324,49 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
                   </button>
                 </div>
               </div>
+            )}
+
+            {/* Routing detection prompt */}
+            {showRoutingPrompt && (
+              <div className="qb-routing-prompt">
+                <p><strong>{(nullRate * 100).toFixed(0)}% of responses are empty for this column.</strong> Were some respondents skipped based on a previous answer?</p>
+                <div className="qb-nominal-actions">
+                  <button className="btn btn-secondary" onClick={() => handleRoutingChoice(true)}>
+                    Yes — conditional question
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => handleRoutingChoice(false)}>
+                    No — all respondents saw it
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Routing source match card */}
+            {routingMatch && !routingDismissed && block.columns[0]?.nullMeaning === 'not_asked' && (
+              <div className="qb-routing-match">
+                <div className="qb-routing-match-title">Routing source detected</div>
+                <p>
+                  This question appears to have been shown only to respondents who rated
+                  &quot;{routingMatch.sourceColumnName}&quot; at {formatOperator(routingMatch.operator, routingMatch.threshold)}.
+                </p>
+                <div className="qb-routing-match-stats">
+                  <span>Match confidence: {(routingMatch.overlapPct * 100).toFixed(0)}% of null patterns align</span>
+                  <span>Respondents who saw this question: {routingMatch.effectiveN} of {block.columns[0]?.nRows ?? 0}</span>
+                </div>
+                <div className="qb-nominal-actions">
+                  <button className="btn btn-primary" onClick={handleApplyRouting}>
+                    Apply as analysis base
+                  </button>
+                  <button className="btn btn-secondary" onClick={handleIgnoreRouting}>
+                    Ignore
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Null semantics note */}
+            {hasParsedData && block.columns[0]?.nMissing > 0 && (
+              <div className="qb-null-note">{nullSemanticNote}</div>
             )}
 
             {/* Confirm / Change */}

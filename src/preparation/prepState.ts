@@ -1,13 +1,13 @@
 /**
  * Preparation state — tracks readiness for analysis.
  *
- * "Run Analysis" button is disabled until:
- * - Missing data strategy is declared (mandatory)
+ * "Run Analysis" button is disabled until all critical
+ * detection flags have been acknowledged.
  */
 
 import type { ColumnDefinition } from '../types/dataTypes'
 import type { DetectionFlag } from '../detection/types'
-import type { PrepState, MissingDataStrategy } from './types'
+import type { PrepState } from './types'
 import { computeMissingDiagnostics, littlesMCARTest } from './missingData'
 
 /**
@@ -15,7 +15,6 @@ import { computeMissingDiagnostics, littlesMCARTest } from './missingData'
  */
 export function computePrepState(
   columns: ColumnDefinition[],
-  declaredStrategy: MissingDataStrategy | null,
   detectionFlags: DetectionFlag[]
 ): PrepState {
   const diagnostics = computeMissingDiagnostics(columns)
@@ -31,11 +30,10 @@ export function computePrepState(
   )
 
   return {
-    missingStrategy: declaredStrategy,
     missingDiagnostics: diagnostics,
     littlesMCAR: mcar,
     pendingFlagCount,
     activeTransformCount,
-    readyToAnalyze: declaredStrategy !== null,
+    readyToAnalyze: pendingFlagCount === 0,
   }
 }

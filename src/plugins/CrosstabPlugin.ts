@@ -13,7 +13,7 @@ import type {
   ResolvedColumnData,
   OutputContract,
 } from './types'
-import type { ChartConfig } from '../types/dataTypes'
+import type { ChartConfig, NullMeaning } from '../types/dataTypes'
 
 interface CrosstabCell {
   count: number
@@ -39,7 +39,8 @@ function computeCrosstab(
   segValues: (number | string | null)[],
   colName: string,
   colId: string,
-  segName: string
+  segName: string,
+  nullMeaning: NullMeaning = 'missing'
 ): CrosstabResult {
   // Collect unique labels
   const rowSet = new Set<string | number>()
@@ -67,7 +68,16 @@ function computeCrosstab(
   let grandTotal = 0
 
   for (let i = 0; i < n; i++) {
-    if (colValues[i] === null || segValues[i] === null) continue
+    // For 'not_chosen': include rows where segment is present even if question is null
+    // (null question = "not selected" — counted in segment total)
+    if (segValues[i] === null) continue
+    if (colValues[i] === null) {
+      if (nullMeaning === 'not_chosen') {
+        // Count toward segment total (grandTotal) but not toward any row label
+        grandTotal++
+      }
+      continue
+    }
     const ri = rowLabels.indexOf(colValues[i] as string | number)
     const ci = colLabels.indexOf(segValues[i] as string | number)
     if (ri >= 0 && ci >= 0) {
@@ -171,7 +181,7 @@ const CrosstabPlugin: AnalysisPlugin = {
     if (!data.segment) throw new Error('CrosstabPlugin requires a segment column')
 
     const crosstabs = data.columns.map((col) =>
-      computeCrosstab(col.values, data.segment!.values, col.name, col.id, data.segment!.name)
+      computeCrosstab(col.values, data.segment!.values, col.name, col.id, data.segment!.name, col.nullMeaning ?? 'missing')
     )
 
     const charts: ChartConfig[] = []
@@ -203,9 +213,10 @@ const CrosstabPlugin: AnalysisPlugin = {
       }
     })
 
+    const columnNullMeanings = data.columns.map((c) => c.nullMeaning ?? 'missing')
     return {
       pluginId: 'crosstab',
-      data: { crosstabs },
+      data: { crosstabs, columnNullMeanings },
       charts,
       findings,
       plainLanguage: this.plainLanguage({ pluginId: 'crosstab', data: { crosstabs }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),

@@ -9,6 +9,7 @@ import type {
   PastedData,
   ColumnDefinition,
   Transform,
+  SubgroupFilter,
 } from '../types/dataTypes'
 
 interface DatasetGraphState {
@@ -31,6 +32,16 @@ interface DatasetGraphState {
   toggleTransform: (nodeId: string, columnId: string, transformId: string) => void
   reorderTransforms: (nodeId: string, columnId: string, orderedIds: string[]) => void
   snapshotStack: (nodeId: string, columnId: string) => Transform[]
+
+  // Imputation operations
+  applyImputation: (nodeId: string, imputedColumns: Map<string, (number | string | null)[]>) => void
+
+  // Weight operations
+  setComputedWeights: (nodeId: string, weights: number[], label: string) => void
+
+  // Subgroup operations
+  setSubgroup: (nodeId: string, filter: SubgroupFilter) => void
+  clearSubgroup: (nodeId: string) => void
 
   // Bulk reset
   reset: () => void
@@ -155,6 +166,61 @@ export const useDatasetGraphStore = create<DatasetGraphState>()((set, get) => ({
     }
     return []
   },
+
+  applyImputation: (nodeId, imputedColumns) =>
+    set((s) => ({
+      nodes: s.nodes.map((node) => {
+        if (node.id !== nodeId) return node
+        const updatedGroups = node.parsedData.groups.map((group) => ({
+          ...group,
+          columns: group.columns.map((col) => {
+            const imputed = imputedColumns.get(col.id)
+            return imputed ? { ...col, imputedValues: imputed } : col
+          }),
+        }))
+        return {
+          ...node,
+          parsedData: { ...node.parsedData, groups: updatedGroups },
+          dataVersion: node.dataVersion + 1,
+        }
+      }),
+    })),
+
+  setComputedWeights: (nodeId, weights, label) =>
+    set((s) => ({
+      nodes: s.nodes.map((node) => {
+        if (node.id !== nodeId) return node
+        const syntheticCol: ColumnDefinition = {
+          id: `computed_weight_${nodeId}`,
+          name: label,
+          type: 'weight',
+          nRows: weights.length,
+          nMissing: 0,
+          nullMeaning: 'missing',
+          rawValues: weights,
+          fingerprint: null,
+          semanticDetectionCache: null,
+          transformStack: [],
+          sensitivity: 'anonymous',
+          declaredScaleRange: null,
+        }
+        return { ...node, weights: syntheticCol, dataVersion: node.dataVersion + 1 }
+      }),
+    })),
+
+  setSubgroup: (nodeId, filter) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === nodeId ? { ...n, activeSubgroup: filter } : n
+      ),
+    })),
+
+  clearSubgroup: (nodeId) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === nodeId ? { ...n, activeSubgroup: null } : n
+      ),
+    })),
 
   reset: () => set(initialState),
 }))

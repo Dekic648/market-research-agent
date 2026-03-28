@@ -96,6 +96,29 @@
   line-height: 1.5;
 }
 
+.finding-subgroup-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--purple-bg);
+  color: var(--purple-text);
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.finding-weighted-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--teal-bg);
+  color: var(--teal-text);
+  display: inline-block;
+  margin-bottom: 6px;
+  margin-left: 4px;
+}
+
 .finding-headline { margin-bottom: 8px; }
 
 .finding-key-metrics {

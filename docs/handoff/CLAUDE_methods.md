@@ -5,6 +5,8 @@
 > It does not get swapped out. It grows over time as methods are added.
 > When building a new plugin, find it here first — engine function, capabilities, preconditions.
 > When adding to the engine, add a stub here too.
+>
+> **Last updated:** 2026-03-28 — 18 plugins built, 675 tests passing
 
 ---
 
@@ -12,14 +14,12 @@
 
 Each entry has:
 - **Plugin ID** — what `AnalysisRegistry.register({ id: '...' })` expects
-- **Engine function** — the `stats-engine.ts` function it calls via `workerClient.runAnalysis()`
+- **Engine function** — the `stats-engine.ts` function it calls
 - **Status** — `built` | `engine-only` (function exists, plugin not yet written) | `planned` (neither exists yet)
-- **Task wiring** — `auto` (TaskProposer proposes it), `cross-question` (proposed for cross-question analysis), `manual-only` (user must add it), `—` (not yet wired)
+- **Task wiring** — `auto` (TaskProposer proposes it), `cross-question` (proposed for cross-question analysis), `cross-type-bridge` (survey × behavioral), `manual-only` (user must add it), `—` (not yet wired)
 - **requires** — `DataCapability[]` for `CapabilityMatcher`
 - **preconditions** — checks that run before the plugin executes
 - **Priority** — `P1` (build first) | `P2` | `P3` (advanced, build later)
-
-> **TaskProposer** (`src/engine/TaskProposer.ts`) is the Layer 2 intelligence that proposes `AnalysisTask[]` from `QuestionBlock[]`. It knows which plugins to propose for which question types — within-question (frequency, reliability) and cross-question (driver analysis, cross-scale correlation). Plugins marked `auto` are proposed by the system. Plugins marked `cross-question` are proposed when the dataset has the right structure (e.g., single-item outcome + multi-item predictors). Plugins marked `manual-only` are available but must be explicitly requested by the user.
 
 ---
 
@@ -40,15 +40,16 @@ Each entry has:
 |---|---|---|---|---|---|---|
 | `kw_significance` | `kruskalWallis()` | built | auto (with segment) | `continuous\|ordinal`, `segment` | minGroupSize(5) | P1 |
 | `posthoc` | `mannWhitney()` | built | auto (depends on kw) | `continuous\|ordinal`, `segment` | depends on kw_significance | P1 |
+| `time_segment_comparison` | `kruskalWallis()` via groupByPeriod | built | cross-question (temporal × continuous) | `temporal`, `continuous` | 2–8 periods, ≥5 per period | P1 |
 | `ttest_independent` | `ttest()` | engine-only | — | `continuous`, `binary` | normalityCheck, leveneTest | P1 |
 | `ttest_paired` | `pairedTTest()` | engine-only | — | `continuous`, `repeated` | normalityCheck | P1 |
 | `anova_oneway` | `anova()` | engine-only | — | `continuous`, `segment` | normalityCheck, leveneTest | P1 |
 | `anova_twoway` | `anovaTwoWay()` | planned | — | `continuous`, `segment×2` | normalityCheck | P2 |
-| `rm_anova` | `repeatedMeasuresANOVA()` | planned | — | `continuous`, `repeated` | mauchlysSphericity | P1 |
-| `ancova` | `ancova()` | planned | — | `continuous`, `segment`, `covariate` | homogeneityOfSlopes | P2 |
+| `rm_anova` | `repeatedMeasuresANOVA()` | engine-only | — | `continuous`, `repeated` | mauchlysSphericity | P1 |
+| `ancova` | `ancova()` | engine-only | — | `continuous`, `segment`, `covariate` | homogeneityOfSlopes | P2 |
 | `manova` | `manova()` | planned | — | `continuous×2+`, `segment` | boxMTest | P3 |
-| `mcnemar` | `mcnemar()` | planned | — | `binary`, `repeated` | none | P2 |
-| `fisher_exact` | `fisherExact()` | planned | — | `categorical` | expectedCells(5) | P2 |
+| `mcnemar` | `mcnemar()` | engine-only | — | `binary`, `repeated` | none | P2 |
+| `fisher_exact` | `fisherExact()` | engine-only | — | `categorical` | expectedCells(5) | P2 |
 | `cochranQ` | `cochranQ()` | planned | — | `binary`, `repeated×3+` | none | P3 |
 
 ---
@@ -57,9 +58,9 @@ Each entry has:
 
 | Plugin ID | Engine function | Status | Task wiring | requires | preconditions | Priority |
 |---|---|---|---|---|---|---|
-| `correlation` | `pearson()`, `spearman()` | built | auto (3+ items), cross-question (2+ blocks) | `continuous` | none | P1 |
+| `correlation` | `pearson()`, `correlationMatrix()` | built | auto (3+ items), cross-question, cross-type-bridge | `continuous` | none | P1 |
 | `point_biserial` | `pointBiserial()` | built | cross-question (binary + continuous) | `binary`, `continuous` | none | P1 |
-| `partial_correlation` | `partialCorrelation()` | planned | — | `continuous×3+` | none | P2 |
+| `partial_correlation` | `partialCorrelation()` | engine-only | — | `continuous×3+` | none | P2 |
 | `polychoric` | `polychoricCorr()` | planned | — | `ordinal` | none | P2 |
 | `tetrachoric` | `tetrachoricCorr()` | planned | — | `binary` | none | P3 |
 
@@ -69,14 +70,14 @@ Each entry has:
 
 | Plugin ID | Engine function | Status | Task wiring | requires | preconditions | Priority |
 |---|---|---|---|---|---|---|
-| `regression` | `linearRegression()` | built | cross-question (outcome + predictors) | `continuous`, `n>30` | vifCheck(10), normalityOfResiduals | P1 |
-| `driver_analysis` | `linearRegression()` | built | cross-question (single rating ~ multi-item scales) | `continuous`, `n>100` | depends on regression | P1 |
+| `regression` | `linearRegression()` + `kFoldCVLinear()` | built | cross-question, cross-type-bridge | `continuous`, `n>30` | vifCheck(10) | P1 |
+| `driver_analysis` | `linearRegression()` + `kFoldCVLinear()` | built | cross-question, cross-type-bridge | `continuous`, `n>30` | depends on regression | P1 |
+| `ordinal_regression` | `ordinalRegression()` | built | manual | `ordinal`, `n>30` | parallelLinesTest | P1 |
+| `mediation` | `mediation()` + `bootstrapIndirectEffect()` | built | cross-question (3 continuous) | `continuous`, `n>50` | none | P1 |
+| `moderation_analysis` | `moderation()` + `johnsonNeyman()` | built | manual | `continuous`, `n>50` | none | P1 |
 | `logistic_regression` | `logisticRegression()` | engine-only | — | `binary`, `n>50` | none | P1 |
-| `ordinal_regression` | `ordinalRegression()` | planned | — | `ordinal`, `n>30` | parallelLinesTest | P1 |
 | `hierarchical_regression` | `linearRegression()` blocks | planned | — | `continuous`, `n>30` | vifCheck per block | P2 |
-| `mediation` | `mediation()` | planned | — | `continuous`, `n>50` | none | P1 |
-| `moderation` | `moderation()` | planned | — | `continuous`, `n>50` | none | P1 |
-| `poisson_regression` | `poissonRegression()` | planned | — | `count`, `n>30` | none | P3 |
+| `poisson_regression` | `poissonRegression()` | engine-only | — | `count`, `n>30` | none | P3 |
 
 ---
 
@@ -98,10 +99,10 @@ Each entry has:
 
 | Plugin ID | Engine function | Status | Task wiring | requires | preconditions | Priority |
 |---|---|---|---|---|---|---|
-| `kmeans` | `kMeans()` | engine-only | — | `continuous` | none | P2 |
-| `hierarchical_clustering` | `hierarchicalCluster()` | planned | — | `continuous` | none | P2 |
-| `cluster_validation` | `silhouetteScore()`, `elbowPlot()` | planned | — | `continuous` | depends on kmeans | P2 |
 | `segment_profile` | `describe()` per segment | built | auto (with segment) | `continuous\|ordinal`, `segment` | none | P1 |
+| `kmeans` | `kMeans()` | engine-only | — | `continuous` | none | P2 |
+| `hierarchical_clustering` | `hierarchicalCluster()` | engine-only | — | `continuous` | none | P2 |
+| `cluster_validation` | `silhouetteScore()`, `elbowPlot()` | planned | — | `continuous` | depends on kmeans | P2 |
 
 ---
 
@@ -109,11 +110,10 @@ Each entry has:
 
 | Plugin ID | Engine function | Status | requires | preconditions | Priority |
 |---|---|---|---|---|---|
-| `shapiro_wilk` | `shapiroWilk()` | planned | `continuous`, `n<2000` | none | P1 |
-| `levene_test` | `levene()` | planned | `continuous`, `segment` | none | P1 |
-| `outlier_detection` | `cooksD()`, `mahalanobis()` | engine-only | `continuous` | none | P2 |
-
-> Note: `shapiroWilk()` and `levene()` are precondition validators used by other plugins — they need to exist as engine functions before P1 plugins that require them can run.
+| `shapiro_wilk` | `shapiroWilk()` | engine-only | `continuous`, `n<2000` | none | P1 |
+| `levene_test` | `levene()` | engine-only | `continuous`, `segment` | none | P1 |
+| `outlier_detection` | `cooksDistance()` | built (inline in regression) | `continuous` | none | P1 |
+| `parallel_lines_test` | `parallelLinesTest()` | built (precondition of ordinal_regression) | `ordinal` | none | P1 |
 
 ---
 
@@ -125,44 +125,51 @@ Each entry has:
 | `gabor_granger` | `gaborGranger()` | planned | `binary` (WTP per price) | none | P2 |
 | `turf` | `turf()` | planned | `multiple_response` | none | P2 |
 | `jar_penalty` | `penaltyAnalysis()` | planned | `ordinal` (JAR scale) | none | P2 |
-| `maxdiff` | `maxDiff()` | planned | `choice` | none | P3 — complex |
-| `conjoint` | `conjoint()` | planned | `choice` | none | P3 — separate decision |
+| `maxdiff` | `maxDiff()` | engine-only | `choice` | none | P3 — complex |
+| `conjoint` | `conjoint()` | engine-only | `choice` | none | P3 — separate decision |
 
 ---
 
 ## SECTION 9 — Power Analysis
 
-| Plugin ID | Engine function | Status | requires | preconditions | Priority |
-|---|---|---|---|---|---|
-| `power_ttest` | `powerTTest()` | planned | none — meta plugin | none | P1 |
-| `power_anova` | `powerANOVA()` | planned | none — meta plugin | none | P1 |
-| `power_correlation` | `powerCorrelation()` | planned | none — meta plugin | none | P1 |
-| `power_chisq` | `powerChiSq()` | planned | none — meta plugin | none | P1 |
+| Plugin ID | Engine function | Status | Task wiring | requires | preconditions | Priority |
+|---|---|---|---|---|---|---|
+| `power_analysis` | `powerTTest()`, `powerANOVA()`, `powerCorrelation()`, `powerChiSq()` | built | manual-only | none — meta plugin | none | P1 |
 
-> Power analysis plugins take user inputs (effect size, alpha, desired power) rather than column data. They return required N or achieved power. The "run all" HeadlessRunner skips these — they are always interactive.
+> All four test types handled by one plugin with a `testType` parameter. Two modes: required N (given effect + power) and achieved power (given N). HeadlessRunner skips this — always interactive. Added to `never` list in TaskProposer for all question types.
 
 ---
 
-## SECTION 10 — Longitudinal and Repeated
+## SECTION 10 — Temporal Analysis
 
-| Plugin ID | Engine function | Status | requires | preconditions | Priority |
-|---|---|---|---|---|---|
-| `wave_comparison` | multiple | planned | `DatasetEdge.relationship === 'wave_comparison'` | alignmentValid | P2 |
-| `benchmark_overlay` | multiple | planned | `DatasetEdge.relationship === 'benchmark'` | none | P2 |
-| `wilcoxon` | `wilcoxon()` | engine-only | `continuous`, `repeated` | none | P2 |
-| `friedman` | `friedman()` | engine-only | `ordinal`, `repeated×3+` | none | P2 |
+| Plugin ID | Engine function | Status | Task wiring | requires | preconditions | Priority |
+|---|---|---|---|---|---|---|
+| `trend_over_time` | `trendOverTime()` | built | cross-question (temporal × continuous) | `temporal`, `continuous` | none | P1 |
+| `period_frequency` | `groupByPeriod()` | built | auto (timestamped) | `temporal` | none | P1 |
+| `time_segment_comparison` | `groupByPeriod()` + `kruskalWallis()` | built | cross-question (temporal × continuous) | `temporal`, `continuous` | 2–8 periods, ≥5 each | P1 |
+| `wave_comparison` | multiple | planned | — | `DatasetEdge.relationship === 'wave_comparison'` | alignmentValid | P2 |
+| `benchmark_overlay` | multiple | planned | — | `DatasetEdge.relationship === 'benchmark'` | none | P2 |
 
 ---
 
-## SECTION 11 — Text and Open-Ended
+## SECTION 11 — Model Diagnostics
+
+| Plugin ID | Engine function | Status | requires | preconditions | Priority |
+|---|---|---|---|---|---|
+| `kfold_cv_linear` | `kFoldCVLinear()` | built (inline in regression/driver) | `continuous`, `n>30` | none | P1 |
+| `kfold_cv_logistic` | `kFoldCVLogistic()` | built (engine function, not yet plugin) | `binary`, `n>30` | none | P1 |
+| `cooks_distance` | `cooksDistance()` | built (inline in regression/driver) | `continuous` | none | P1 |
+| `post_analysis_verifier` | `PostAnalysisVerifier.run()` | built (runs after all findings) | any significant finding | segment columns exist | P1 |
+
+---
+
+## SECTION 12 — Text and Open-Ended
 
 | Plugin ID | Engine function | Status | requires | preconditions | Priority |
 |---|---|---|---|---|---|
 | `sentiment` | Claude API | planned | `verbatim` | sensitivity === 'anonymous' | P2 |
 | `theme_extraction` | Claude API | planned | `verbatim` | sensitivity === 'anonymous' | P2 |
 | `coded_openend` | `multiResponseFreq()` | planned | `multi_assigned` | none | P2 |
-
-> Text plugins use the Claude API, not the Stats Engine. They follow the same `AnalysisPlugin` contract but their `run()` function calls `semanticChecks.ts` patterns. Always check `sensitivity === 'anonymous'` before firing.
 
 ---
 
@@ -171,11 +178,11 @@ Each entry has:
 When a new method is requested:
 
 - [ ] Find or create its entry in this file
-- [ ] Check if `stats-engine.ts` already has the function (it has 59 — check first)
-- [ ] If not: add function to `stats-engine.ts`, add typed interface to `types.ts`, add `weights?` if aggregation, write 3+ tests, verify no regressions
+- [ ] Check if `stats-engine.ts` already has the function (it has 60+ — check first)
+- [ ] If not: add function to `stats-engine.ts`, add `weights?` if aggregation, write 3+ tests, verify no regressions
 - [ ] Write the plugin in `src/plugins/`
-- [ ] Write plugin tests — CI refuses merge without them
+- [ ] Write plugin tests
 - [ ] `AnalysisRegistry.register(plugin)` at module load
-- [ ] **Add to TaskProposer**: add entry in `WITHIN_QUESTION_RULES` matrix in `src/engine/TaskProposer.ts` (which question types trigger this plugin, with segment, with multiple items). For cross-question plugins, add proposal logic in Pass 2.
+- [ ] **Add to TaskProposer**: add entry in `WITHIN_QUESTION_RULES` matrix (which question types trigger this plugin). For cross-question plugins, add proposal logic in Pass 2.
 - [ ] Update this file: change status from `planned` to `built`, set Task wiring column
 - [ ] Done — `CapabilityMatcher` discovers it automatically, `TaskProposer` proposes it intelligently

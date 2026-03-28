@@ -67,6 +67,7 @@ function computeSignificance(
 
   // Run Kruskal-Wallis
   // @ts-ignore — stats engine is @ts-nocheck
+  // TODO: add weights support to kruskalWallis()
   const kw = StatsEngine.kruskalWallis(groupArrays)
 
   const N = groupArrays.reduce((s, g) => s + g.length, 0)

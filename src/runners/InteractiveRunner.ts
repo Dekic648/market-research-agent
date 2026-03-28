@@ -8,7 +8,8 @@
  */
 
 import type { AnalysisPlugin, PluginStepResult, ResolvedColumnData } from '../plugins/types'
-import type { Finding } from '../types/dataTypes'
+import type { Finding, ColumnDefinition, AnalysisLogEntry } from '../types/dataTypes'
+import { PostAnalysisVerifier } from '../engine/PostAnalysisVerifier'
 import type {
   IStepRunner, RunResult, RunProgress, AssumptionViolation,
 } from './IStepRunner'
@@ -23,10 +24,18 @@ interface InteractiveRunnerConfig {
   dataFingerprint: string
   dataVersion: number
   sessionId: string
+  /** Full column definitions for post-analysis verification (Simpson's, moderation) */
+  allColumnDefinitions?: ColumnDefinition[]
+  /** Segment columns for confound checks */
+  segmentColumnDefinitions?: ColumnDefinition[]
+  rowCount?: number
 }
 
 export class InteractiveRunner implements IStepRunner {
   private config: InteractiveRunnerConfig
+
+  /** Accumulated log entries — caller writes these to AnalysisLog store */
+  readonly logEntries: Partial<AnalysisLogEntry>[] = []
 
   onProgress?: (progress: RunProgress) => void
   onViolation?: (violation: AssumptionViolation) => void
@@ -130,6 +139,34 @@ export class InteractiveRunner implements IStepRunner {
         }
       } catch (err) {
         skippedPlugins.push(plugin.id)
+      }
+    }
+
+    // Post-analysis verification pass (Simpson's Paradox, moderation)
+    if (this.config.allColumnDefinitions && this.config.segmentColumnDefinitions) {
+      for (const finding of allFindings) {
+        const results = PostAnalysisVerifier.run({
+          finding,
+          allColumns: this.config.allColumnDefinitions,
+          segmentColumns: this.config.segmentColumnDefinitions,
+          rowCount: this.config.rowCount ?? this.config.data.n,
+        })
+        for (const result of results) {
+          finding.verificationResults = [...(finding.verificationResults ?? []), result]
+          this.logEntries.push({
+            type: 'verification_result',
+            userId: this.config.userId,
+            dataFingerprint: this.config.dataFingerprint,
+            dataVersion: this.config.dataVersion,
+            sessionId: this.config.sessionId,
+            payload: {
+              findingId: finding.id,
+              checkType: result.checkType,
+              severity: result.severity,
+              message: result.message,
+            },
+          })
+        }
       }
     }
 

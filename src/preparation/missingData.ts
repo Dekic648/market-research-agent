@@ -1,13 +1,22 @@
 /**
- * Missing data diagnostics and strategy declaration.
+ * Missing data diagnostics.
  *
- * The ONLY mandatory step before analysis can run.
- * User must declare a strategy — the "Run Analysis" button
- * stays disabled until this is done.
+ * Surfaces useful information about missing patterns.
+ * Does not apply strategies — null handling is determined
+ * by nullMeaning on each column, not by a global strategy.
  */
 
 import type { ColumnDefinition } from '../types/dataTypes'
-import type { MissingDataSummary, LittlesMCARResult, MissingDataStrategy } from './types'
+import type { MissingDataSummary, LittlesMCARResult } from './types'
+import * as StatsEngine from '../engine/stats-engine'
+
+export interface MICEResult {
+  imputedColumns: Map<string, (number | string | null)[]>
+  totalImputed: number
+  columnsImputed: number
+  method: 'mice'
+  nImputations: number
+}
 
 /**
  * Compute missing data diagnostics for a set of columns.
@@ -47,8 +56,7 @@ export function computeMissingDiagnostics(columns: ColumnDefinition[]): MissingD
  *
  * Simplified implementation: tests whether the pattern of missing values
  * is independent of observed values using a chi-square approach.
- * If p < 0.05, missingness is NOT completely at random — listwise
- * deletion may introduce bias.
+ * If p < 0.05, missingness is NOT completely at random.
  */
 export function littlesMCARTest(columns: ColumnDefinition[]): LittlesMCARResult {
   const n = columns[0]?.rawValues.length ?? 0
@@ -149,34 +157,107 @@ export function littlesMCARTest(columns: ColumnDefinition[]): LittlesMCARResult 
 }
 
 /**
- * Apply the declared missing data strategy to values.
- * Returns a new array — never mutates input.
+ * Run MICE (Multiple Imputation by Chained Equations) on columns with
+ * nullMeaning === 'missing' that are numeric.
+ *
+ * Returns imputed values per column. rawValues are not modified.
  */
-export function applyMissingStrategy(
-  values: (number | string | null)[],
-  strategy: MissingDataStrategy,
-  columnMean?: number
-): (number | string | null)[] {
-  switch (strategy) {
-    case 'listwise':
-      // Listwise: nulls stay as null — filtering happens at analysis time
-      return values.slice()
+export function runMICEImputation(
+  columns: ColumnDefinition[],
+  rowCount: number
+): MICEResult {
+  // Filter to eligible columns: numeric, nullMeaning === 'missing', has missing values
+  const eligible = columns.filter((c) =>
+    (c.nullMeaning === 'missing' || c.nullMeaning === undefined)
+    && (c.type === 'rating' || c.type === 'behavioral' || c.type === 'matrix')
+    && c.nMissing > 0
+  )
 
-    case 'pairwise':
-      // Pairwise: nulls stay — each analysis uses available pairs
-      return values.slice()
-
-    case 'mean_imputation': {
-      // Replace nulls with column mean
-      let mean = columnMean
-      if (mean === undefined) {
-        const nums = values
-          .filter((v): v is number => typeof v === 'number')
-        mean = nums.length > 0 ? nums.reduce((s, n) => s + n, 0) / nums.length : 0
-      }
-      return values.map((v) => (v === null ? mean! : v))
-    }
+  if (eligible.length === 0) {
+    return { imputedColumns: new Map(), totalImputed: 0, columnsImputed: 0, method: 'mice', nImputations: 5 }
   }
+
+  // Also include numeric columns with NO missing as predictors
+  const allNumeric = columns.filter((c) =>
+    (c.type === 'rating' || c.type === 'behavioral' || c.type === 'matrix')
+    && (c.nullMeaning === 'missing' || c.nullMeaning === undefined)
+  )
+
+  // Build column-major data matrix for the engine
+  // data[j][i] = column j, row i
+  const n = rowCount
+  const data: (number | null)[][] = allNumeric.map((col) => {
+    const result: (number | null)[] = []
+    for (let i = 0; i < n; i++) {
+      const v = col.rawValues[i]
+      if (v === null || v === undefined) {
+        result.push(null)
+      } else {
+        const num = typeof v === 'number' ? v : parseFloat(String(v))
+        result.push(isNaN(num) ? null : num)
+      }
+    }
+    return result
+  })
+
+  // @ts-ignore — engine is @ts-nocheck
+  const miceResult = StatsEngine.multipleImputation(data, 5)
+
+  // Map pooled results back to column IDs
+  const imputedColumns = new Map<string, (number | string | null)[]>()
+  let totalImputed = 0
+
+  for (let j = 0; j < allNumeric.length; j++) {
+    const col = allNumeric[j]
+    if (col.nMissing === 0) continue // no missing values — skip
+
+    const pooledCol = miceResult.pooledData[j]
+    const imputedArr: (number | string | null)[] = []
+
+    for (let i = 0; i < n; i++) {
+      if (col.rawValues[i] === null || col.rawValues[i] === undefined) {
+        imputedArr.push(pooledCol[i])
+        totalImputed++
+      } else {
+        imputedArr.push(col.rawValues[i])
+      }
+    }
+
+    imputedColumns.set(col.id, imputedArr)
+  }
+
+  return {
+    imputedColumns,
+    totalImputed,
+    columnsImputed: imputedColumns.size,
+    method: 'mice',
+    nImputations: 5,
+  }
+}
+
+/**
+ * Replace null values with the mean of non-null values.
+ * Returns a new array — never mutates input.
+ * Available for future use (MICE wiring, SQL data imports).
+ */
+export function imputeColumnMean(values: (number | null)[]): (number | null)[] {
+  const nums = values.filter((v): v is number => v !== null)
+  if (nums.length === 0) return values.slice()
+  const mean = nums.reduce((s, n) => s + n, 0) / nums.length
+  return values.map((v) => (v === null ? mean : v))
+}
+
+/**
+ * Replace null values with the median of non-null values.
+ * Returns a new array — never mutates input.
+ * Used for automatic low-rate imputation (≤5% missing) on behavioral columns.
+ */
+export function imputeColumnMedian(values: (number | null)[]): (number | null)[] {
+  const nums = values.filter((v): v is number => v !== null).sort((a, b) => a - b)
+  if (nums.length === 0) return values.slice()
+  const mid = Math.floor(nums.length / 2)
+  const median = nums.length % 2 === 0 ? (nums[mid - 1] + nums[mid]) / 2 : nums[mid]
+  return values.map((v) => (v === null ? median : v))
 }
 
 // Standard normal CDF approximation (Abramowitz & Stegun)

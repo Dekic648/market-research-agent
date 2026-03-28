@@ -484,3 +484,54 @@ describe('resolvePrefixedOrdinalSortKeys', () => {
     expect(keys).toEqual([0, null, 2])
   })
 })
+
+// ============================================================
+// resolveColumn — imputed values
+// ============================================================
+
+describe('resolveColumn — imputedValues', () => {
+  it('uses imputedValues when set and nullMeaning is missing', () => {
+    const col: ColumnDefinition = {
+      ...makeColumn([1, null, 3]),
+      nullMeaning: 'missing',
+      imputedValues: [1, 2, 3], // null replaced with 2
+    }
+    const result = resolveColumn(col)
+    expect(result).toEqual([1, 2, 3])
+  })
+
+  it('uses rawValues when nullMeaning is not_chosen even if imputedValues is set', () => {
+    const col: ColumnDefinition = {
+      ...makeColumn([1, null, 3]),
+      nullMeaning: 'not_chosen',
+      imputedValues: [1, 2, 3],
+    }
+    const result = resolveColumn(col)
+    // Should use rawValues, not imputedValues
+    expect(result).toEqual([1, null, 3])
+  })
+
+  it('uses rawValues when imputedValues is undefined (unchanged behavior)', () => {
+    const col: ColumnDefinition = {
+      ...makeColumn([1, null, 3]),
+      nullMeaning: 'missing',
+    }
+    const result = resolveColumn(col)
+    expect(result).toEqual([1, null, 3])
+  })
+
+  it('applies transforms on top of imputedValues', () => {
+    const col: ColumnDefinition = {
+      ...makeColumn([1, null, 5], [{
+        id: 't1', type: 'reverseCode', enabled: true,
+        params: { scaleMin: 1, scaleMax: 5 },
+        createdAt: 0, createdBy: 'user', source: 'user',
+      }]),
+      nullMeaning: 'missing',
+      imputedValues: [1, 3, 5], // null replaced with 3
+    }
+    const result = resolveColumn(col)
+    // reverseCode: 6 - value → [5, 3, 1]
+    expect(result).toEqual([5, 3, 1])
+  })
+})

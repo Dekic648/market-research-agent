@@ -14,7 +14,7 @@ import type {
   ResolvedColumn,
   OutputContract,
 } from './types'
-import type { ChartConfig } from '../types/dataTypes'
+import type { ChartConfig, NullMeaning } from '../types/dataTypes'
 
 // ============================================================
 // Result types
@@ -43,7 +43,11 @@ interface ColumnFrequency {
 // Core computation
 // ============================================================
 
-function computeFrequency(col: ResolvedColumn): ColumnFrequency {
+function computeFrequency(
+  col: ResolvedColumn,
+  nullMeaning: NullMeaning = 'missing',
+  rowCount?: number
+): ColumnFrequency {
   const counts = new Map<string | number, number>()
   let nMissing = 0
   const nums: number[] = []
@@ -61,7 +65,14 @@ function computeFrequency(col: ResolvedColumn): ColumnFrequency {
     }
   }
 
-  const valid = col.values.length - nMissing
+  // Denominator depends on null meaning:
+  // 'not_chosen': full sample (rowCount) — nulls are implicit "not selected"
+  // 'not_asked':  non-null count — respondents who received the question
+  // 'missing':    non-null count — current default behavior
+  const nonNull = col.values.length - nMissing
+  const valid = nullMeaning === 'not_chosen' && rowCount
+    ? rowCount
+    : nonNull
   const items: FrequencyItem[] = Array.from(counts.entries())
     .map(([value, count]) => ({
       value,
@@ -233,7 +244,9 @@ const FrequencyPlugin: AnalysisPlugin = {
   } satisfies OutputContract,
 
   async run(data: ResolvedColumnData): Promise<PluginStepResult> {
-    const frequencies = data.columns.map(computeFrequency)
+    const frequencies = data.columns.map((col) =>
+      computeFrequency(col, col.nullMeaning ?? 'missing', data.rowCount)
+    )
 
     const charts: ChartConfig[] = []
 
@@ -263,12 +276,13 @@ const FrequencyPlugin: AnalysisPlugin = {
       theme: null,
     }))
 
+    const columnNullMeanings = data.columns.map((c) => c.nullMeaning ?? 'missing')
     const result: PluginStepResult = {
       pluginId: 'frequency',
-      data: { frequencies },
+      data: { frequencies, columnNullMeanings },
       charts,
       findings,
-      plainLanguage: this.plainLanguage({ pluginId: 'frequency', data: { frequencies }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
+      plainLanguage: this.plainLanguage({ pluginId: 'frequency', data: { frequencies, columnNullMeanings }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'frequency', nColumns: frequencies.length } },
     }
@@ -277,24 +291,28 @@ const FrequencyPlugin: AnalysisPlugin = {
   },
 
   plainLanguage(result: PluginStepResult): string {
-    const freqs = (result.data as { frequencies: ColumnFrequency[] }).frequencies
+    const d = result.data as { frequencies: ColumnFrequency[]; columnNullMeanings?: string[] }
+    const freqs = d.frequencies
     if (!freqs || freqs.length === 0) return 'No data to analyze.'
+    const nullMeanings = d.columnNullMeanings ?? []
+    const isNotAsked = nullMeanings[0] === 'not_asked'
+    const basePrefix = isNotAsked ? `Among respondents who answered this question (n=${freqs[0]?.n ?? 0}), ` : ''
 
     if (freqs.length === 1) {
       const f = freqs[0]
       const top = f.items[0]
       const second = f.items.length > 1 ? f.items[1] : null
       if (top) {
-        const topStr = `Most respondents chose "${top.value}" (${top.pct.toFixed(1)}%).`
+        const topStr = `most chose "${top.value}" (${top.pct.toFixed(1)}%).`
         const secondStr = second ? ` "${second.value}" was the next most common at ${second.pct.toFixed(1)}%.` : ''
-        return `${f.columnName}: ${topStr}${secondStr}`
+        return `${f.columnName}: ${basePrefix}${isNotAsked ? topStr : topStr.charAt(0).toUpperCase() + topStr.slice(1)}${secondStr}`
       }
       return `${f.columnName}: ${f.n} responses across ${f.items.length} categories.`
     }
 
     const bestItem = freqs.reduce((best, f) => (f.top2box > best.top2box ? f : best))
     const worstItem = freqs.reduce((worst, f) => (f.top2box < worst.top2box ? f : worst))
-    return `"${bestItem.columnName}" is the highest rated item (${bestItem.top2box.toFixed(0)}% positive). "${worstItem.columnName}" is the lowest rated (${worstItem.top2box.toFixed(0)}% positive).`
+    return `${basePrefix}"${bestItem.columnName}" is the highest rated item (${bestItem.top2box.toFixed(0)}% positive). "${worstItem.columnName}" is the lowest rated (${worstItem.top2box.toFixed(0)}% positive).`
   },
 }
 

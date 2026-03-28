@@ -85,6 +85,8 @@ export interface Transform {
   source: 'user' | 'auto-detected'
 }
 
+export type NullMeaning = 'not_chosen' | 'not_asked' | 'missing'
+
 export interface ColumnDefinition {
   id: string
   name: string
@@ -94,13 +96,14 @@ export interface ColumnDefinition {
   categorySubtype?: CategorySubtype
   nRows: number
   nMissing: number
-  // NULL SEMANTICS — read this before touching rawValues
-  // null at row N means: respondent did not answer, was not shown this question,
-  // or (for checkbox/multi-response columns) did not select this option.
-  // null in a checkbox column is NOT missing data — it means "not chosen" and
-  // carries analytical meaning. Never impute or drop nulls from checkbox columns.
-  // Missing data strategy (MissingDataPanel) must never apply to checkbox columns.
+  // NULL SEMANTICS — always check nullMeaning before analyzing a column.
+  // 'not_chosen': null counts as 0. Use rowCount as denominator. Never impute.
+  // 'not_asked':  null means excluded. Use non-null count as denominator. Never impute.
+  // 'missing':    null means unknown. Each analysis uses available (non-null) values.
+  // Columns with nullMeaning 'not_chosen' or 'not_asked' are excluded from missing data diagnostics.
+  nullMeaning: NullMeaning
   rawValues: (number | string | null)[]     // immutable after parse — NEVER written to after adapter
+  imputedValues?: (number | string | null)[] // set by MICE — used by resolveColumn when nullMeaning === 'missing'
   fingerprint: ColumnFingerprint | null      // null until fingerprint phase
   semanticDetectionCache: DetectionSource[] | null
   transformStack: Transform[]               // empty array until transform phase
@@ -167,6 +170,7 @@ export interface AnalysisTask {
   dependsOn: string[]               // task IDs that must complete first
   proposedBy: 'system' | 'user'
   reason: string                    // "Matrix scale with 5 items → reliability analysis"
+  source?: string                   // 'cross_type_bridge' for survey×behavioral proposals
 
   status: 'proposed' | 'confirmed' | 'skipped'
         | 'running' | 'complete' | 'failed'
@@ -175,6 +179,16 @@ export interface AnalysisTask {
 // ============================================================
 // Dataset Graph
 // ============================================================
+
+export interface SubgroupFilter {
+  id: string
+  label: string                     // e.g. "Detractors"
+  columnId: string                  // the filter column
+  operator: 'lte' | 'gte' | 'lt' | 'gt' | 'eq' | 'neq' | 'in'
+  value: number | string | (number | string)[]
+  effectiveN: number                // computed at filter creation time
+  source: 'auto' | 'manual'        // 'auto' = created by routing detector, 'manual' = user-defined
+}
 
 export interface DatasetNode {
   id: string
@@ -186,6 +200,7 @@ export interface DatasetNode {
   source: 'user' | 'platform_benchmark' | 'imported_reference'
   dataVersion: number       // increment on every re-paste
   createdAt: number
+  activeSubgroup: SubgroupFilter | null
 }
 
 export interface DatasetEdge {
@@ -228,6 +243,8 @@ export type LogEntryType =
   | 'analysis_failed'
   | 'assumption_violation'
   | 'sampling_applied'
+  | 'imputation_applied'
+  | 'weight_validation_failed'
   // Findings events
   | 'finding_added'
   | 'finding_suppressed'
@@ -255,6 +272,13 @@ export interface AnalysisLogEntry {
 // Findings
 // ============================================================
 
+export interface SubgroupContext {
+  label: string        // "Detractors"
+  condition: string    // "Overall rating ≤ 4"
+  n: number            // 60
+  totalN: number       // 200
+}
+
 export interface Finding {
   id: string
   stepId: string
@@ -274,6 +298,8 @@ export interface Finding {
   dataVersion: number
   dataFingerprint: string
   verificationResults?: VerificationResult[]
+  subgroupContext?: SubgroupContext | null
+  weightedBy?: string
 }
 
 export interface VerificationResult {

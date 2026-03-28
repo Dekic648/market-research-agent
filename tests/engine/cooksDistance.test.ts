@@ -120,8 +120,9 @@ describe('RegressionPlugin Cook\'s D integration', () => {
     const finding = result.findings[0]
     expect(finding.flags).toBeDefined()
     expect(finding.flags!.length).toBeGreaterThan(0)
-    expect(finding.flags![0].type).toBe('influential_outliers')
-    expect(finding.flags![0].message).toContain("Cook's D")
+    const cooksFlag = finding.flags!.find((f: any) => f.type === 'influential_outliers')
+    expect(cooksFlag).toBeDefined()
+    expect(cooksFlag!.message).toContain("Cook's D")
   })
 
   it('no influential_outliers flag for clean data', async () => {

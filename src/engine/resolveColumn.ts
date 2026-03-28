@@ -13,6 +13,7 @@
 
 import type { ColumnDefinition } from '../types/dataTypes'
 import type { TypedTransform } from '../types/transforms'
+import { imputeColumnMedian } from '../preparation/missingData'
 
 /**
  * Apply the transform stack to a column's rawValues and return resolved values.
@@ -27,8 +28,26 @@ export function resolveColumn(
 ): (number | string | null)[] {
   const stack = stackOverride ?? (definition.transformStack as TypedTransform[])
 
-  // Start from rawValues — never mutate the original
-  let values = definition.rawValues.slice()
+  // Use imputed values if available and column has genuine missingness
+  const baseValues = (
+    definition.imputedValues !== undefined &&
+    definition.nullMeaning === 'missing'
+  ) ? definition.imputedValues : definition.rawValues
+
+  // Auto-median imputation for behavioral columns with ≤5% missing
+  let resolvedBase = baseValues
+  if (
+    definition.nullMeaning === 'missing' &&
+    definition.imputedValues === undefined &&
+    (definition.type === 'behavioral' || definition.type === 'rating' || definition.type === 'matrix') &&
+    definition.nMissing > 0 &&
+    definition.nMissing / definition.nRows <= 0.05
+  ) {
+    resolvedBase = imputeColumnMedian(baseValues as (number | null)[])
+  }
+
+  // Start from base values — never mutate the original
+  let values = resolvedBase.slice()
 
   // Apply each enabled transform in order
   for (const transform of stack) {

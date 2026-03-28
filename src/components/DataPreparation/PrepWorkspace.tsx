@@ -1,18 +1,19 @@
 /**
  * PrepWorkspace — the preparation layer between tagging and analysis.
  *
- * Three panels + PrepLog strip:
- * 1. MissingDataPanel — MANDATORY
+ * Panels:
+ * 1. MissingDataPanel — displays how null values will be handled based on column classifications
  * 2. RecodePanel — driven by detection flags
  * 3. PrepLog — shows status, "Run Analysis" button
  */
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { MissingDataPanel } from './MissingDataPanel'
 import { RecodePanel } from './RecodePanel'
+import { WeightCalculator } from './WeightCalculator'
+import { DataSummaryCard } from './DataSummaryCard'
 import type { ColumnDefinition, DatasetNode, Transform } from '../../types/dataTypes'
 import type { DetectionFlag } from '../../detection/types'
-import type { MissingDataStrategy } from '../../preparation/types'
 import { useDatasetGraphStore } from '../../stores/datasetGraph'
 import { useAnalysisLog } from '../../stores/analysisLog'
 import './PrepPanels.css'
@@ -24,26 +25,37 @@ interface PrepWorkspaceProps {
 }
 
 export function PrepWorkspace({ node, detectionFlags, onReadyToAnalyze }: PrepWorkspaceProps) {
-  const [strategy, setStrategy] = useState<MissingDataStrategy | null>(null)
   const addTransform = useDatasetGraphStore((s) => s.addTransform)
+  const applyImputation = useDatasetGraphStore((s) => s.applyImputation)
+  const setComputedWeights = useDatasetGraphStore((s) => s.setComputedWeights)
   const logAction = useAnalysisLog((s) => s.log)
 
   // Flatten all columns from groups
   const allColumns: ColumnDefinition[] = node.parsedData.groups.flatMap((g) => g.columns)
 
-  const handleStrategyChange = useCallback(
-    (s: MissingDataStrategy) => {
-      setStrategy(s)
+  const pendingFlagCount = detectionFlags.filter(
+    (f) => f.type === 'reverse_coded' || f.type === 'merged_header' || f.type === 'possible_computed'
+  ).length
+
+  const handleImputationComplete = useCallback(
+    (result: import('../../preparation/missingData').MICEResult) => {
+      applyImputation(node.id, result.imputedColumns)
       logAction({
-        type: 'missing_strategy_declared',
+        type: 'imputation_applied',
         userId: 'anonymous',
         dataFingerprint: allColumns[0]?.fingerprint?.hash ?? 'unknown',
         dataVersion: node.dataVersion,
         sessionId: 'current',
-        payload: { strategy: s },
+        payload: {
+          method: 'mice',
+          nImputations: result.nImputations,
+          columnsImputed: result.columnsImputed,
+          totalImputed: result.totalImputed,
+          columnIds: [...result.imputedColumns.keys()],
+        },
       })
     },
-    [logAction, allColumns, node.dataVersion]
+    [applyImputation, node.id, node.dataVersion, logAction, allColumns]
   )
 
   const handleConfirmRecode = useCallback(
@@ -81,15 +93,29 @@ export function PrepWorkspace({ node, detectionFlags, onReadyToAnalyze }: PrepWo
   )
 
   const reverseFlags = detectionFlags.filter((f) => f.type === 'reverse_coded')
+  const readyToAnalyze = pendingFlagCount === 0
+
+  // Build pseudo-blocks from node groups for DataSummaryCard
+  const pseudoBlocks: import('../../types/dataTypes').QuestionBlock[] = node.parsedData.groups.map((g, i) => ({
+    id: `group_${i}`,
+    label: g.label,
+    questionType: g.questionType,
+    columns: g.columns,
+    role: 'question' as const,
+    confirmed: true,
+    pastedAt: 0,
+    scaleRange: g.scaleRange,
+  }))
 
   return (
     <div className="prep-workspace">
+      <DataSummaryCard
+        blocks={pseudoBlocks}
+        rowCount={node.rowCount}
+        availableAnalysisCount={0}
+      />
       <div className="prep-panels">
-        <MissingDataPanel
-          columns={allColumns}
-          strategy={strategy}
-          onStrategyChange={handleStrategyChange}
-        />
+        <MissingDataPanel columns={allColumns} onImputationComplete={handleImputationComplete} />
         <RecodePanel
           flags={detectionFlags}
           onConfirmRecode={handleConfirmRecode}
@@ -97,25 +123,29 @@ export function PrepWorkspace({ node, detectionFlags, onReadyToAnalyze }: PrepWo
         />
       </div>
 
+      <WeightCalculator
+        node={node}
+        columns={allColumns}
+        onWeightsComputed={(weights, label) => setComputedWeights(node.id, weights, label)}
+      />
+
       {/* PrepLog strip */}
       <div className="prep-log card">
         <div className="prep-log-items">
-          {strategy ? (
-            <span className="badge badge-teal">Missing: {strategy}</span>
-          ) : (
-            <span className="badge badge-red">Missing strategy required</span>
-          )}
           {reverseFlags.length > 0 && (
             <span className="badge badge-amber">{reverseFlags.length} recode flag(s)</span>
           )}
           {activeTransforms > 0 && (
             <span className="badge badge-purple">{activeTransforms} transform(s) active</span>
           )}
+          {pendingFlagCount > 0 && (
+            <span className="badge badge-red">{pendingFlagCount} flag(s) need review</span>
+          )}
         </div>
 
         <button
           className="btn btn-primary"
-          disabled={!strategy}
+          disabled={!readyToAnalyze}
           onClick={onReadyToAnalyze}
         >
           Run Analysis →

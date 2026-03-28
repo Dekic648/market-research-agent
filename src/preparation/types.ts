@@ -2,8 +2,6 @@
  * Data Preparation types.
  */
 
-export type MissingDataStrategy = 'listwise' | 'pairwise' | 'mean_imputation'
-
 export interface MissingDataSummary {
   totalMissing: number
   totalCells: number
@@ -25,7 +23,6 @@ export interface LittlesMCARResult {
 }
 
 export interface PrepState {
-  missingStrategy: MissingDataStrategy | null
   missingDiagnostics: MissingDataSummary | null
   littlesMCAR: LittlesMCARResult | null
   pendingFlagCount: number

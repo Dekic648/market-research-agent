@@ -1057,6 +1057,11 @@ import jStat from 'jstat'
     for (var i = 0; i < n; i++) ssRes += residuals[i] * residuals[i];
     dw = ssRes > 0 ? dw / ssRes : 0;
 
+    // Log-likelihood, AIC, BIC for linear regression (assuming normal errors)
+    var logLikLin = -n / 2 * Math.log(2 * Math.PI) - n / 2 * Math.log(SSE / n) - n / 2;
+    var AIClin = n * Math.log(SSE / n) + 2 * (p + 1);
+    var BIClin = n * Math.log(SSE / n) + Math.log(n) * (p + 1);
+
     return {
       test: "Linear Regression (OLS)",
       coefficients: betas,
@@ -1075,6 +1080,9 @@ import jStat from 'jstat'
       residuals: residuals,
       predicted: yHat,
       durbinWatson: dw,
+      logLikelihood: logLikLin,
+      AIC: AIClin,
+      BIC: BIClin,
       n: n,
       p: p
     };
@@ -2123,6 +2131,530 @@ import jStat from 'jstat'
   }
 
   /* ================================================================
+   *  K-FOLD CROSS-VALIDATION
+   * ================================================================ */
+
+  function seededShuffle(indices, seed) {
+    var state = seed >>> 0;
+    var result = indices.slice();
+    for (var i = result.length - 1; i > 0; i--) {
+      state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+      var j = state % (i + 1);
+      var tmp = result[i]; result[i] = result[j]; result[j] = tmp;
+    }
+    return result;
+  }
+
+  function kFoldCVLinear(y, xs, k, seed) {
+    if (k === undefined) k = 5;
+    if (seed === undefined) seed = 42;
+    var n = y.length;
+    if (n < 30) return { k: k, foldResults: [], meanR2orAUC: 0, sdR2orAUC: 0, meanRMSE: 0, sdRMSE: 0, meanAUC: 0, sdAUC: 0, overfit: false, overfitDelta: 0, error: "n < 30 — too few samples for cross-validation" };
+
+    if (xs.length > 0 && typeof xs[0] === "number") xs = [xs];
+    var indices = [];
+    for (var i = 0; i < n; i++) indices.push(i);
+    var shuffled = seededShuffle(indices, seed);
+    var foldSize = Math.floor(n / k);
+
+    // Training R² for comparison
+    var trainReg = linearRegression(y, xs);
+    var trainingR2 = trainReg.R2 || 0;
+
+    var foldResults = [];
+    for (var f = 0; f < k; f++) {
+      var testStart = f * foldSize;
+      var testEnd = f === k - 1 ? n : (f + 1) * foldSize;
+      var testIdx = shuffled.slice(testStart, testEnd);
+      var trainIdx = shuffled.slice(0, testStart).concat(shuffled.slice(testEnd));
+
+      var trainY = trainIdx.map(function(i) { return y[i]; });
+      var trainXs = xs.map(function(x) { return trainIdx.map(function(i) { return x[i]; }); });
+      var testY = testIdx.map(function(i) { return y[i]; });
+      var testXs = xs.map(function(x) { return testIdx.map(function(i) { return x[i]; }); });
+
+      var foldReg = linearRegression(trainY, trainXs);
+      if (foldReg.error) continue;
+
+      // Predict on test set
+      var cols = foldReg.coefficients.length;
+      var testPred = [];
+      for (var ti = 0; ti < testY.length; ti++) {
+        var pred = foldReg.coefficients[0]; // intercept
+        for (var j = 1; j < cols; j++) {
+          pred += foldReg.coefficients[j] * testXs[j - 1][ti];
+        }
+        testPred.push(pred);
+      }
+
+      // Test R² and RMSE
+      var testMean = mean(testY);
+      var ssTot = 0, ssRes = 0;
+      for (var ti = 0; ti < testY.length; ti++) {
+        ssTot += Math.pow(testY[ti] - testMean, 2);
+        ssRes += Math.pow(testY[ti] - testPred[ti], 2);
+      }
+      var testR2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+      var testRMSE = Math.sqrt(ssRes / testY.length);
+
+      foldResults.push({
+        fold: f + 1,
+        trainN: trainY.length,
+        testN: testY.length,
+        trainMetric: foldReg.R2,
+        testMetric: testR2,
+        testRMSE: testRMSE
+      });
+    }
+
+    if (foldResults.length === 0) return { k: k, foldResults: [], meanR2orAUC: 0, sdR2orAUC: 0, meanRMSE: 0, sdRMSE: 0, meanAUC: 0, sdAUC: 0, overfit: false, overfitDelta: 0 };
+
+    var testR2s = foldResults.map(function(f) { return f.testMetric; });
+    var testRMSEs = foldResults.map(function(f) { return f.testRMSE; });
+    var meanCVR2 = mean(testR2s);
+    var sdCVR2 = sd(testR2s);
+    var meanCVRMSE = mean(testRMSEs);
+    var sdCVRMSE = sd(testRMSEs);
+    var delta = trainingR2 - meanCVR2;
+
+    return {
+      k: k,
+      foldResults: foldResults,
+      meanR2orAUC: meanCVR2,
+      sdR2orAUC: sdCVR2,
+      meanRMSE: meanCVRMSE,
+      sdRMSE: sdCVRMSE,
+      meanAUC: 0,
+      sdAUC: 0,
+      overfit: delta > 0.1,
+      overfitDelta: delta
+    };
+  }
+
+  function kFoldCVLogistic(y, xs, k, seed) {
+    if (k === undefined) k = 5;
+    if (seed === undefined) seed = 42;
+    var n = y.length;
+    if (n < 30) return { k: k, foldResults: [], meanR2orAUC: 0, sdR2orAUC: 0, meanRMSE: 0, sdRMSE: 0, meanAUC: 0, sdAUC: 0, overfit: false, overfitDelta: 0, error: "n < 30 — too few samples for cross-validation" };
+
+    if (xs.length > 0 && typeof xs[0] === "number") xs = [xs];
+    var indices = [];
+    for (var i = 0; i < n; i++) indices.push(i);
+    var shuffled = seededShuffle(indices, seed);
+    var foldSize = Math.floor(n / k);
+
+    // Training AUC
+    var trainLog = logisticRegression(y, xs);
+    var trainingAUC = computeAUC(y, trainLog.predicted || []);
+
+    var foldResults = [];
+    for (var f = 0; f < k; f++) {
+      var testStart = f * foldSize;
+      var testEnd = f === k - 1 ? n : (f + 1) * foldSize;
+      var testIdx = shuffled.slice(testStart, testEnd);
+      var trainIdx = shuffled.slice(0, testStart).concat(shuffled.slice(testEnd));
+
+      var trainY = trainIdx.map(function(i) { return y[i]; });
+      var trainXs = xs.map(function(x) { return trainIdx.map(function(i) { return x[i]; }); });
+      var testY = testIdx.map(function(i) { return y[i]; });
+      var testXs = xs.map(function(x) { return testIdx.map(function(i) { return x[i]; }); });
+
+      // Need at least 2 classes in training set
+      var hasZero = trainY.some(function(v) { return v === 0; });
+      var hasOne = trainY.some(function(v) { return v === 1; });
+      if (!hasZero || !hasOne) continue;
+
+      var foldLog = logisticRegression(trainY, trainXs);
+      if (!foldLog.converged) continue;
+
+      // Predict on test set
+      var testProbs = [];
+      for (var ti = 0; ti < testY.length; ti++) {
+        var z = foldLog.coefficients[0];
+        for (var j = 1; j < foldLog.coefficients.length; j++) {
+          z += foldLog.coefficients[j] * testXs[j - 1][ti];
+        }
+        testProbs.push(1 / (1 + Math.exp(-z)));
+      }
+
+      var testAUC = computeAUC(testY, testProbs);
+      var trainAUCFold = computeAUC(trainY, foldLog.predicted || trainY.map(function() { return 0.5; }));
+
+      foldResults.push({
+        fold: f + 1,
+        trainN: trainY.length,
+        testN: testY.length,
+        trainMetric: trainAUCFold,
+        testMetric: testAUC,
+        testRMSE: 0
+      });
+    }
+
+    if (foldResults.length === 0) return { k: k, foldResults: [], meanR2orAUC: 0, sdR2orAUC: 0, meanRMSE: 0, sdRMSE: 0, meanAUC: 0, sdAUC: 0, overfit: false, overfitDelta: 0 };
+
+    var testAUCs = foldResults.map(function(f) { return f.testMetric; });
+    var meanCVAUC = mean(testAUCs);
+    var sdCVAUC = sd(testAUCs);
+    var delta = trainingAUC - meanCVAUC;
+
+    return {
+      k: k,
+      foldResults: foldResults,
+      meanR2orAUC: meanCVAUC,
+      sdR2orAUC: sdCVAUC,
+      meanRMSE: 0,
+      sdRMSE: 0,
+      meanAUC: meanCVAUC,
+      sdAUC: sdCVAUC,
+      overfit: delta > 0.1,
+      overfitDelta: delta
+    };
+  }
+
+  // AUC via trapezoidal rule on ROC
+  function computeAUC(actual, predicted) {
+    if (actual.length === 0) return 0.5;
+    var pairs = [];
+    for (var i = 0; i < actual.length; i++) {
+      pairs.push({ y: actual[i], p: predicted[i] });
+    }
+    pairs.sort(function(a, b) { return b.p - a.p; }); // descending by predicted prob
+
+    var nPos = 0, nNeg = 0;
+    for (var i = 0; i < pairs.length; i++) {
+      if (pairs[i].y === 1) nPos++; else nNeg++;
+    }
+    if (nPos === 0 || nNeg === 0) return 0.5;
+
+    var tp = 0, fp = 0;
+    var prevTPR = 0, prevFPR = 0;
+    var auc = 0;
+
+    for (var i = 0; i < pairs.length; i++) {
+      if (pairs[i].y === 1) tp++; else fp++;
+      var tpr = tp / nPos;
+      var fpr = fp / nNeg;
+      auc += (fpr - prevFPR) * (tpr + prevTPR) / 2; // trapezoid
+      prevTPR = tpr;
+      prevFPR = fpr;
+    }
+    return auc;
+  }
+
+  /* ================================================================
+   *  PARALLEL LINES TEST (simplified omnibus for ordinal regression)
+   * ================================================================ */
+
+  function parallelLinesTest(y, xs) {
+    if (xs.length > 0 && typeof xs[0] === "number") xs = [xs];
+    var n = y.length;
+    var p = xs.length;
+    var levels = [];
+    for (var i = 0; i < n; i++) { if (levels.indexOf(y[i]) === -1) levels.push(y[i]); }
+    levels.sort(function(a, b) { return a - b; });
+    var K = levels.length;
+    if (K < 3 || p === 0) return { passed: true, chi2: 0, df: 0, p: 1, interpretation: "Not enough ordinal levels for parallel lines test." };
+
+    // Fit separate binary logistic regressions at each cut-point
+    var cutCoefs = []; // cutCoefs[cutIdx][predictorIdx] = { B, se }
+    for (var k = 0; k < K - 1; k++) {
+      var binaryY = [];
+      for (var i = 0; i < n; i++) binaryY.push(y[i] <= levels[k] ? 1 : 0);
+      var reg = logisticRegression(binaryY, xs);
+      if (!reg.converged) continue;
+      var coefs = [];
+      for (var j = 0; j < p; j++) {
+        coefs.push({ B: reg.coefficients[j + 1] || 0, se: reg.se[j + 1] || 1 });
+      }
+      cutCoefs.push(coefs);
+    }
+
+    if (cutCoefs.length < 2) return { passed: true, chi2: 0, df: 0, p: 1, interpretation: "Insufficient data for parallel lines test." };
+
+    // Simplified omnibus: for each predictor, compute variance of its coefficient across cut-points
+    // Flag as violated if variance > 2 × mean(se²)
+    var chi2 = 0;
+    var df = (cutCoefs.length - 1) * p;
+    for (var j = 0; j < p; j++) {
+      var betas = cutCoefs.map(function(c) { return c[j].B; });
+      var ses = cutCoefs.map(function(c) { return c[j].se; });
+      var betaMean = mean(betas);
+      var betaVar = 0;
+      for (var k = 0; k < betas.length; k++) betaVar += Math.pow(betas[k] - betaMean, 2);
+      betaVar /= Math.max(betas.length - 1, 1);
+      var meanSE2 = ses.reduce(function(s, se) { return s + se * se; }, 0) / ses.length;
+      // Chi-square contribution: sum of (beta_k - betaMean)^2 / se_k^2
+      for (var k = 0; k < betas.length; k++) {
+        var sek2 = ses[k] * ses[k];
+        if (sek2 > 0) chi2 += Math.pow(betas[k] - betaMean, 2) / sek2;
+      }
+    }
+
+    df = Math.max(df, 1);
+    var pVal = 1 - jStat.chisquare.cdf(chi2, df);
+    var passed = pVal > 0.05;
+    return {
+      passed: passed,
+      chi2: chi2,
+      df: df,
+      p: pVal,
+      interpretation: passed
+        ? "Proportional odds assumption holds (p = " + pVal.toFixed(3) + "). Ordinal regression is appropriate."
+        : "Proportional odds assumption may be violated (p = " + pVal.toFixed(3) + "). Interpret ordinal regression with caution."
+    };
+  }
+
+  /* ================================================================
+   *  BOOTSTRAP INDIRECT EFFECT (for mediation)
+   * ================================================================ */
+
+  function bootstrapIndirectEffect(x, mediator, y, nBootstrap, seed) {
+    if (nBootstrap === undefined) nBootstrap = 1000;
+    if (seed === undefined) seed = 42;
+    var n = x.length;
+    var indices = [];
+    for (var i = 0; i < n; i++) indices.push(i);
+
+    var bootEffects = [];
+    var state = seed >>> 0;
+
+    for (var b = 0; b < nBootstrap; b++) {
+      // Resample with replacement using LCG
+      var sample = [];
+      for (var i = 0; i < n; i++) {
+        state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+        sample.push(state % n);
+      }
+      var bx = sample.map(function(i) { return x[i]; });
+      var bm = sample.map(function(i) { return mediator[i]; });
+      var by = sample.map(function(i) { return y[i]; });
+
+      var regA = linearRegression(bm, [bx]);
+      if (regA.error) continue;
+      var regBC = linearRegression(by, [bx, bm]);
+      if (regBC.error) continue;
+
+      var aCoef = regA.coefficients[1];
+      var bCoef = regBC.coefficients[2];
+      bootEffects.push(aCoef * bCoef);
+    }
+
+    if (bootEffects.length < 10) return { lower: NaN, upper: NaN, se: NaN };
+
+    bootEffects.sort(function(a, b) { return a - b; });
+    var lower = bootEffects[Math.floor(bootEffects.length * 0.025)];
+    var upper = bootEffects[Math.floor(bootEffects.length * 0.975)];
+    var bootMean = mean(bootEffects);
+    var bootSE = sd(bootEffects, 1);
+
+    return { lower: lower, upper: upper, se: bootSE };
+  }
+
+  /* ================================================================
+   *  JOHNSON-NEYMAN REGIONS (for moderation)
+   * ================================================================ */
+
+  function johnsonNeyman(b1, b3, se_b1, se_b3, cov_b1b3, MSE, dfResid, modValues) {
+    // Find moderator values where simple slope t = ±tcrit
+    // Simple slope at W: slope = b1 + b3*W
+    // SE(slope) = sqrt(var(b1) + W²*var(b3) + 2*W*cov(b1,b3))
+    // var(b1) = MSE * XtXinv[1][1], already extracted as se_b1² / MSE * MSE = se_b1²
+    var var_b1 = se_b1 * se_b1;
+    var var_b3 = se_b3 * se_b3;
+    var tcrit = dfResid > 0 ? jStat.studentt.inv(0.975, dfResid) : 1.96;
+
+    // Quadratic: (b1 + b3*W)² = tcrit² * (var_b1 + W²*var_b3 + 2*W*cov_b1b3)
+    // b3²W² + 2*b1*b3*W + b1² = tcrit²*var_b3*W² + 2*tcrit²*cov*W + tcrit²*var_b1
+    // (b3² - tcrit²*var_b3)*W² + (2*b1*b3 - 2*tcrit²*cov)*W + (b1² - tcrit²*var_b1) = 0
+
+    var A = b3 * b3 - tcrit * tcrit * var_b3;
+    var B = 2 * b1 * b3 - 2 * tcrit * tcrit * cov_b1b3;
+    var C = b1 * b1 - tcrit * tcrit * var_b1;
+
+    var disc = B * B - 4 * A * C;
+    var regions = [];
+
+    if (disc < 0 || A === 0) {
+      // No transition point — effect is always significant or always non-significant
+      var slopeAtMean = b1; // at centered moderator = 0
+      var seAtMean = Math.sqrt(var_b1);
+      var tAtMean = seAtMean > 0 ? Math.abs(slopeAtMean) / seAtMean : 0;
+      var alwaysSig = tAtMean > tcrit;
+      regions.push({
+        moderatorRange: [-Infinity, Infinity],
+        significant: alwaysSig,
+        description: alwaysSig ? "Effect is significant across all moderator values." : "Effect is not significant at any moderator value."
+      });
+      return { regions: regions, hasSignificantRegion: alwaysSig };
+    }
+
+    var w1 = (-B - Math.sqrt(disc)) / (2 * A);
+    var w2 = (-B + Math.sqrt(disc)) / (2 * A);
+    if (w1 > w2) { var tmp = w1; w1 = w2; w2 = tmp; }
+
+    // Determine which side is significant: test at w1-1 and w2+1
+    function isSigAt(w) {
+      var slope = b1 + b3 * w;
+      var se = Math.sqrt(Math.max(0, var_b1 + w * w * var_b3 + 2 * w * cov_b1b3));
+      return se > 0 ? Math.abs(slope / se) > tcrit : false;
+    }
+
+    var belowSig = isSigAt(w1 - 1);
+    var betweenSig = isSigAt((w1 + w2) / 2);
+    var aboveSig = isSigAt(w2 + 1);
+
+    var modMin = modValues && modValues.length > 0 ? Math.min.apply(null, modValues) : -Infinity;
+    var modMax = modValues && modValues.length > 0 ? Math.max.apply(null, modValues) : Infinity;
+
+    // Clamp JN points to observed moderator range
+    var w1InRange = w1 >= modMin && w1 <= modMax;
+    var w2InRange = w2 >= modMin && w2 <= modMax;
+
+    if (w1InRange) {
+      regions.push({
+        moderatorRange: [modMin, w1],
+        significant: belowSig,
+        description: belowSig ? "Effect is significant when moderator < " + w1.toFixed(2) : "Effect is not significant when moderator < " + w1.toFixed(2)
+      });
+    }
+    if (w1InRange || w2InRange) {
+      regions.push({
+        moderatorRange: [w1InRange ? w1 : modMin, w2InRange ? w2 : modMax],
+        significant: betweenSig,
+        description: betweenSig ? "Effect is significant between moderator " + w1.toFixed(2) + " and " + w2.toFixed(2) : "Effect is not significant between moderator " + w1.toFixed(2) + " and " + w2.toFixed(2)
+      });
+    }
+    if (w2InRange) {
+      regions.push({
+        moderatorRange: [w2, modMax],
+        significant: aboveSig,
+        description: aboveSig ? "Effect is significant when moderator > " + w2.toFixed(2) : "Effect is not significant when moderator > " + w2.toFixed(2)
+      });
+    }
+
+    if (regions.length === 0) {
+      regions.push({ moderatorRange: [modMin, modMax], significant: belowSig, description: "JN boundary outside observed range." });
+    }
+
+    return { regions: regions, hasSignificantRegion: regions.some(function(r) { return r.significant; }) };
+  }
+
+  /* ================================================================
+   *  POWER ANALYSIS FUNCTIONS
+   * ================================================================ */
+
+  function powerTTest(params) {
+    var d = params.effectSize !== undefined ? params.effectSize : 0.5;
+    var alpha = params.alpha || 0.05;
+    var tails = params.tails || 2;
+    var zAlpha = tails === 1
+      ? jStat.normal.inv(1 - alpha, 0, 1)
+      : jStat.normal.inv(1 - alpha / 2, 0, 1);
+
+    if (d === 0) return { requiredN: Infinity, achievedPower: 0, effectSize: 0, alpha: alpha, power: 0, effectSizeLabel: "negligible", interpretation: "Effect size is zero — no sample size can detect it." };
+
+    if (params.n !== undefined) {
+      // Achieved power mode
+      var ncp = d * Math.sqrt(params.n / 2);
+      var achievedPower = 1 - jStat.normal.cdf(zAlpha - ncp, 0, 1);
+      var label = Math.abs(d) < 0.2 ? "negligible" : Math.abs(d) < 0.5 ? "small" : Math.abs(d) < 0.8 ? "moderate" : "large";
+      return {
+        requiredN: null, achievedPower: achievedPower, effectSize: d, alpha: alpha, power: achievedPower,
+        effectSizeLabel: label,
+        interpretation: "With " + params.n + " per group and d=" + d.toFixed(2) + ", power is " + (achievedPower * 100).toFixed(1) + "%." + (achievedPower < 0.8 ? " Consider increasing sample size." : "")
+      };
+    }
+
+    // Required N mode
+    var targetPower = params.power || 0.80;
+    var zBeta = jStat.normal.inv(targetPower, 0, 1);
+    var requiredN = Math.ceil(2 * Math.pow((zAlpha + zBeta) / d, 2));
+    var label = Math.abs(d) < 0.2 ? "negligible" : Math.abs(d) < 0.5 ? "small" : Math.abs(d) < 0.8 ? "moderate" : "large";
+    return {
+      requiredN: requiredN, achievedPower: null, effectSize: d, alpha: alpha, power: targetPower,
+      effectSizeLabel: label,
+      interpretation: "To detect d=" + d.toFixed(2) + " (" + label + ") with " + (targetPower * 100).toFixed(0) + "% power, need " + requiredN + " per group (" + (requiredN * 2) + " total)."
+    };
+  }
+
+  function powerANOVA(params) {
+    var f = params.effectSize || 0.25;
+    var k = params.nGroups || 3;
+    var alpha = params.alpha || 0.05;
+
+    if (f === 0) return { requiredN: Infinity, achievedPower: 0, effectSize: 0, alpha: alpha, power: 0, effectSizeLabel: "negligible", interpretation: "Effect size is zero." };
+
+    // Use Cohen's formula: lambda = n*k*f^2, power via normal approximation
+    var zAlpha = jStat.normal.inv(1 - alpha, 0, 1);
+    var label = f < 0.1 ? "negligible" : f < 0.25 ? "small" : f < 0.4 ? "medium" : "large";
+
+    if (params.n !== undefined) {
+      var ncp = f * Math.sqrt(params.n * k / (k - 1));
+      var achievedPower = 1 - jStat.normal.cdf(zAlpha - ncp, 0, 1);
+      return { requiredN: null, achievedPower: achievedPower, effectSize: f, alpha: alpha, power: achievedPower, effectSizeLabel: label, interpretation: "With " + params.n + " per group (" + k + " groups), power is " + (achievedPower * 100).toFixed(1) + "%." };
+    }
+
+    // Required N: solve via normal approximation
+    var targetPower = params.power || 0.80;
+    var zBeta = jStat.normal.inv(targetPower, 0, 1);
+    // ncp needed = zAlpha + zBeta, ncp = f*sqrt(n*k/(k-1))
+    var ncp_needed = zAlpha + zBeta;
+    var nPerGroup = Math.ceil(Math.pow(ncp_needed / f, 2) * (k - 1) / k);
+    nPerGroup = Math.max(nPerGroup, k + 1);
+    return { requiredN: nPerGroup, achievedPower: null, effectSize: f, alpha: alpha, power: targetPower, effectSizeLabel: label, interpretation: "To detect f=" + f.toFixed(2) + " with " + k + " groups at " + (targetPower * 100).toFixed(0) + "% power, need " + nPerGroup + " per group (" + (nPerGroup * k) + " total)." };
+  }
+
+  function powerCorrelation(params) {
+    var r = params.r || 0.3;
+    var alpha = params.alpha || 0.05;
+    var tails = params.tails || 2;
+    var zAlpha = tails === 1 ? jStat.normal.inv(1 - alpha, 0, 1) : jStat.normal.inv(1 - alpha / 2, 0, 1);
+
+    if (r === 0) return { requiredN: Infinity, achievedPower: 0, effectSize: 0, alpha: alpha, power: 0, effectSizeLabel: "negligible", interpretation: "Expected correlation is zero." };
+
+    // Fisher's z
+    var zr = 0.5 * Math.log((1 + Math.abs(r)) / (1 - Math.abs(r)));
+
+    if (params.n !== undefined) {
+      var se = 1 / Math.sqrt(params.n - 3);
+      var ncp = zr / se;
+      var achievedPower = 1 - jStat.normal.cdf(zAlpha - ncp, 0, 1);
+      var label = Math.abs(r) < 0.1 ? "negligible" : Math.abs(r) < 0.3 ? "weak" : Math.abs(r) < 0.5 ? "moderate" : "strong";
+      return { requiredN: null, achievedPower: achievedPower, effectSize: r, alpha: alpha, power: achievedPower, effectSizeLabel: label, interpretation: "With n=" + params.n + " and r=" + r.toFixed(2) + ", power is " + (achievedPower * 100).toFixed(1) + "%." };
+    }
+
+    var targetPower = params.power || 0.80;
+    var zBeta = jStat.normal.inv(targetPower, 0, 1);
+    var requiredN = Math.ceil(Math.pow((zAlpha + zBeta) / zr, 2) + 3);
+    var label = Math.abs(r) < 0.1 ? "negligible" : Math.abs(r) < 0.3 ? "weak" : Math.abs(r) < 0.5 ? "moderate" : "strong";
+    return { requiredN: requiredN, achievedPower: null, effectSize: r, alpha: alpha, power: targetPower, effectSizeLabel: label, interpretation: "To detect r=" + r.toFixed(2) + " at " + (targetPower * 100).toFixed(0) + "% power, need n=" + requiredN + "." };
+  }
+
+  function powerChiSq(params) {
+    var w = params.effectSize || 0.3;
+    var df = params.df || 1;
+    var alpha = params.alpha || 0.05;
+
+    if (w === 0) return { requiredN: Infinity, achievedPower: 0, effectSize: 0, alpha: alpha, power: 0, effectSizeLabel: "negligible", interpretation: "Effect size is zero." };
+
+    // Normal approximation: ncp = w * sqrt(n), test against z_alpha
+    var zAlpha = jStat.normal.inv(1 - alpha, 0, 1);
+    var label = w < 0.1 ? "negligible" : w < 0.3 ? "small" : w < 0.5 ? "medium" : "large";
+
+    if (params.n !== undefined) {
+      var ncp = w * Math.sqrt(params.n);
+      var achievedPower = 1 - jStat.normal.cdf(zAlpha - ncp, 0, 1);
+      return { requiredN: null, achievedPower: achievedPower, effectSize: w, alpha: alpha, power: achievedPower, effectSizeLabel: label, interpretation: "With n=" + params.n + " and w=" + w.toFixed(2) + ", power is " + (achievedPower * 100).toFixed(1) + "%." };
+    }
+
+    var targetPower = params.power || 0.80;
+    var zBeta = jStat.normal.inv(targetPower, 0, 1);
+    var requiredN = Math.ceil(Math.pow((zAlpha + zBeta) / w, 2));
+    requiredN = Math.max(requiredN, df + 1);
+    return { requiredN: requiredN, achievedPower: null, effectSize: w, alpha: alpha, power: targetPower, effectSizeLabel: label, interpretation: "To detect w=" + w.toFixed(2) + " (df=" + df + ") at " + (targetPower * 100).toFixed(0) + "% power, need n=" + requiredN + "." };
+  }
+
+  /* ================================================================
    *  SIMPLE LINEAR REGRESSION (wrapper around linearRegression)
    * ================================================================ */
 
@@ -3042,6 +3574,11 @@ import jStat from 'jstat'
     var tHigh = seHigh === 0 ? 0 : slopeHigh / seHigh;
     var pHigh = dfSimple > 0 ? 2 * (1 - jStat.studentt.cdf(Math.abs(tHigh), dfSimple)) : 1;
 
+    // Johnson-Neyman regions
+    var covB1B3 = XtXinv ? MSE * XtXinv[1][3] : 0;
+    var modValues = moderator.slice();
+    var jnResult = johnsonNeyman(b1, b3, seLow > 0 ? Math.sqrt(MSE * (XtXinv ? XtXinv[1][1] : 1)) : 0.1, seHigh > 0 ? Math.sqrt(MSE * (XtXinv ? XtXinv[3][3] : 1)) : 0.1, covB1B3, MSE, dfSimple, modValues);
+
     return {
       test: "Moderation Analysis",
       rSquared: fullModel.R2,
@@ -3054,7 +3591,8 @@ import jStat from 'jstat'
       simpleSlopes: {
         lowMod: { slope: slopeLow, se: seLow, t: tLow, p: pLow },
         highMod: { slope: slopeHigh, se: seHigh, t: tHigh, p: pHigh }
-      }
+      },
+      jnRegions: jnResult
     };
   }
 
@@ -3315,8 +3853,11 @@ import jStat from 'jstat'
     // Proportion mediated
     var proportionMediated = c === 0 ? 0 : indirectEffect / c;
 
+    // Bootstrap CI for indirect effect
+    var bootCI = bootstrapIndirectEffect(x, mediator, y, 1000, 42);
+
     return {
-      test: "Mediation Analysis (Baron & Kenny + Sobel)",
+      test: "Mediation Analysis (Baron & Kenny + Sobel + Bootstrap)",
       pathA: { B: a, se: se_a, t: t_a, p: p_a },
       pathB: { B: b, se: se_b, t: t_b, p: p_b },
       pathC: { B: c, se: se_c, t: t_c, p: p_c },
@@ -3325,6 +3866,7 @@ import jStat from 'jstat'
       sobelSE: sobelSE,
       sobelZ: sobelZ,
       sobelP: sobelP,
+      bootstrapCI: bootCI,
       proportionMediated: proportionMediated,
       totalEffect: c,
       directEffect: cPrime,
@@ -6907,7 +7449,10 @@ export {
   conjointAnalysis, maxDiff, discreteChoice, latentClassAnalysis,
   cfa, irt, mixedEffects,
   survivalAnalysis, multipleImputation, decisionTree,
-  dummyCode, cooksDistance, interpret, STOPWORDS, SENTIMENT_LEXICON,
+  dummyCode, cooksDistance, kFoldCVLinear, kFoldCVLogistic,
+  parallelLinesTest, bootstrapIndirectEffect, johnsonNeyman,
+  powerTTest, powerANOVA, powerCorrelation, powerChiSq,
+  interpret, STOPWORDS, SENTIMENT_LEXICON,
 }
 
 export const _helpers = {

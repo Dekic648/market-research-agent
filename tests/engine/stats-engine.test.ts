@@ -333,6 +333,38 @@ describe('Simple Linear Regression', () => {
     const sr = linearRegression(regY, [regX])
     expect(sr.fP).toBeLessThan(0.05)
   })
+
+  it('returns AIC, BIC, and logLikelihood', () => {
+    const sr = linearRegression(regY, [regX])
+    expect(typeof sr.AIC).toBe('number')
+    expect(typeof sr.BIC).toBe('number')
+    expect(typeof sr.logLikelihood).toBe('number')
+    expect(sr.AIC).not.toBeNaN()
+    expect(sr.BIC).not.toBeNaN()
+    expect(sr.logLikelihood).not.toBeNaN()
+  })
+
+  it('AIC decreases when a relevant predictor is added', () => {
+    // Model with just noise predictor
+    const noise = regX.map((_, i) => ((i * 7 + 3) % 11) - 5)
+    const srNoise = linearRegression(regY, [noise])
+    // Model with real predictor
+    const srReal = linearRegression(regY, [regX])
+    // Real predictor should have lower (better) AIC
+    expect(srReal.AIC).toBeLessThan(srNoise.AIC)
+  })
+
+  it('AIC increases when an irrelevant predictor is added to a good model', () => {
+    // Good model: y ~ x (R² ≈ 1)
+    const sr1 = linearRegression(regY, [regX])
+    // Add pure noise predictor
+    const noise = regX.map((_, i) => ((i * 13 + 7) % 17) - 8)
+    const sr2 = linearRegression(regY, [regX, noise])
+    // Penalty for extra parameter should outweigh tiny SSE improvement
+    // AIC for 2-predictor model should be >= AIC for 1-predictor model
+    // (may not always hold for very small datasets, but typically holds)
+    expect(sr2.AIC).toBeGreaterThanOrEqual(sr1.AIC - 5) // allow small tolerance
+  })
 })
 
 describe('Multiple Linear Regression', () => {

@@ -1,26 +1,28 @@
 /**
- * MissingDataPanel — MANDATORY step before analysis.
+ * MissingDataPanel — displays how null values will be handled
+ * based on column classifications (nullMeaning).
  *
- * Shows per-variable missing %, Little's MCAR result,
- * and forces user to declare a strategy.
+ * For columns with genuine missingness (nullMeaning: 'missing'),
+ * offers MICE imputation as an optional enhancement.
  */
 
-import { useMemo } from 'react'
-import type { ColumnDefinition } from '../../types/dataTypes'
-import type { MissingDataStrategy, MissingDataSummary, LittlesMCARResult } from '../../preparation/types'
-import { computeMissingDiagnostics, littlesMCARTest } from '../../preparation/missingData'
+import { useState, useMemo, useCallback } from 'react'
+import type { ColumnDefinition, NullMeaning } from '../../types/dataTypes'
+import { computeMissingDiagnostics, littlesMCARTest, runMICEImputation, type MICEResult } from '../../preparation/missingData'
 import './PrepPanels.css'
 
 interface MissingDataPanelProps {
   columns: ColumnDefinition[]
-  strategy: MissingDataStrategy | null
-  onStrategyChange: (strategy: MissingDataStrategy) => void
+  onImputationComplete?: (result: MICEResult) => void
 }
 
-export function MissingDataPanel({ columns, strategy, onStrategyChange }: MissingDataPanelProps) {
-  // Exclude checkbox and multi_assigned — nulls in these columns mean "not selected", not missing data
+export function MissingDataPanel({ columns, onImputationComplete }: MissingDataPanelProps) {
+  // Only show 'missing' columns in diagnostics — not_chosen and not_asked are excluded
   const eligibleColumns = useMemo(
-    () => columns.filter((c) => c.type !== 'checkbox' && c.type !== 'multi_assigned'),
+    () => columns.filter((c) =>
+      c.type !== 'checkbox' && c.type !== 'multi_assigned'
+      && (c.nullMeaning === 'missing' || c.nullMeaning === undefined)
+    ),
     [columns]
   )
   const diagnostics = useMemo(() => computeMissingDiagnostics(eligibleColumns), [eligibleColumns])
@@ -31,17 +33,55 @@ export function MissingDataPanel({ columns, strategy, onStrategyChange }: Missin
 
   const hasMissing = diagnostics.totalMissing > 0
 
+  // Columns eligible for MICE: numeric, nullMeaning 'missing', > 5% missing
+  const miceEligible = useMemo(
+    () => eligibleColumns.filter((c) =>
+      (c.type === 'rating' || c.type === 'behavioral' || c.type === 'matrix')
+      && c.nMissing / c.nRows > 0.05
+    ),
+    [eligibleColumns]
+  )
+
+  const [miceOption, setMiceOption] = useState<'available' | 'mice'>('available')
+  const [miceRunning, setMiceRunning] = useState(false)
+  const [miceResult, setMiceResult] = useState<MICEResult | null>(null)
+
+  const handleRunMICE = useCallback(() => {
+    if (miceRunning) return
+    setMiceRunning(true)
+
+    // Run synchronously (MICE is fast for survey-sized data)
+    try {
+      const result = runMICEImputation(columns, columns[0]?.nRows ?? 0)
+      setMiceResult(result)
+      onImputationComplete?.(result)
+    } finally {
+      setMiceRunning(false)
+    }
+  }, [columns, miceRunning, onImputationComplete])
+
+  // Determine which nullMeaning types are present
+  const presentMeanings = useMemo(() => {
+    const meanings = new Set<NullMeaning>()
+    for (const col of columns) {
+      if (col.nMissing > 0 && col.nullMeaning) meanings.add(col.nullMeaning)
+    }
+    return meanings
+  }, [columns])
+
+  // Check if any column already has imputedValues
+  const hasExistingImputation = useMemo(
+    () => columns.some((c) => c.imputedValues !== undefined),
+    [columns]
+  )
+
   return (
     <div className="prep-panel">
       <div className="prep-panel-header">
-        <h3>Missing Data {!strategy && <span className="required-tag">Required</span>}</h3>
+        <h3>Missing Data</h3>
       </div>
 
-      {!hasMissing ? (
-        <div className="prep-panel-body">
-          <div className="no-missing">No missing values detected. Select any strategy to continue.</div>
-        </div>
-      ) : (
+      {hasMissing && (
         <div className="prep-panel-body">
           {/* Summary bar */}
           <div className="missing-summary">
@@ -76,35 +116,107 @@ export function MissingDataPanel({ columns, strategy, onStrategyChange }: Missin
           {/* MCAR test result */}
           {mcar && mcar.interpretation !== 'insufficient_data' && (
             <div className={`mcar-result ${mcar.interpretation === 'not_MCAR' ? 'mcar-warning' : 'mcar-ok'}`}>
-              <strong>Little's MCAR test:</strong>{' '}
+              <strong>Little&apos;s MCAR test:</strong>{' '}
               {mcar.interpretation === 'MCAR'
-                ? `Missingness appears random (p = ${mcar.p.toFixed(3)}). Any strategy is appropriate.`
-                : `Missingness is NOT random (p = ${mcar.p.toFixed(3)}). Listwise deletion may introduce bias — consider mean imputation.`}
+                ? `Missingness appears random (p = ${mcar.p.toFixed(3)}).`
+                : `Missingness is NOT random (p = ${mcar.p.toFixed(3)}). Results may be affected by which respondents have missing values.`}
             </div>
           )}
         </div>
       )}
 
-      {/* Strategy selection */}
-      <div className="strategy-select">
-        {(['listwise', 'pairwise', 'mean_imputation'] as MissingDataStrategy[]).map((s) => (
-          <button
-            key={s}
-            className={`strategy-btn ${strategy === s ? 'selected' : ''}`}
-            onClick={() => onStrategyChange(s)}
-          >
-            <span className="strategy-name">
-              {s === 'listwise' ? 'Listwise deletion' : s === 'pairwise' ? 'Pairwise deletion' : 'Mean imputation'}
-            </span>
-            <span className="strategy-desc">
-              {s === 'listwise'
-                ? 'Remove rows with any missing value'
-                : s === 'pairwise'
-                  ? 'Use available data per analysis'
-                  : 'Replace missing with column mean'}
-            </span>
-          </button>
-        ))}
+      {!hasMissing && (
+        <div className="prep-panel-body">
+          <div className="no-missing">No missing values detected in standard columns.</div>
+        </div>
+      )}
+
+      {/* MICE imputation option — only when eligible columns exist */}
+      {miceEligible.length > 0 && (
+        <div className="mice-section">
+          <h4>Missing values detected</h4>
+          <p className="mice-desc">
+            {miceEligible.length} column(s) have missing responses that may affect analysis accuracy:
+          </p>
+          <ul className="mice-column-list">
+            {miceEligible.map((c) => (
+              <li key={c.id}>{c.name} — {((c.nMissing / c.nRows) * 100).toFixed(0)}% missing</li>
+            ))}
+          </ul>
+
+          <div className="mice-options">
+            <label className={`mice-option ${miceOption === 'available' ? 'mice-option-selected' : ''}`}>
+              <input type="radio" name="mice" value="available" checked={miceOption === 'available'}
+                onChange={() => setMiceOption('available')} />
+              <div>
+                <strong>Use available responses only</strong>
+                <span>Each analysis uses respondents who answered that question</span>
+              </div>
+            </label>
+            <label className={`mice-option ${miceOption === 'mice' ? 'mice-option-selected' : ''}`}>
+              <input type="radio" name="mice" value="mice" checked={miceOption === 'mice'}
+                onChange={() => setMiceOption('mice')} />
+              <div>
+                <strong>Estimate missing values (Multiple Imputation)</strong>
+                <span>Uses patterns in your data to estimate what missing values would likely have been. More accurate for regression and correlation analyses.</span>
+              </div>
+            </label>
+          </div>
+
+          {miceOption === 'mice' && !miceResult && !hasExistingImputation && (
+            <button className="btn btn-primary" onClick={handleRunMICE} disabled={miceRunning}>
+              {miceRunning ? 'Estimating missing values...' : 'Apply Multiple Imputation'}
+            </button>
+          )}
+
+          {(miceResult || hasExistingImputation) && (
+            <div className="mice-complete">
+              {miceResult
+                ? `Missing values estimated. ${miceResult.totalImputed} values imputed across ${miceResult.columnsImputed} columns.`
+                : 'Multiple imputation has been applied.'}
+              {miceOption === 'mice' && (
+                <button className="btn btn-secondary btn-sm" onClick={handleRunMICE} disabled={miceRunning} style={{ marginLeft: 8 }}>
+                  Re-run imputation
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* How empty cells are handled */}
+      <div className="null-handling-info">
+        <h4>How empty cells are handled</h4>
+
+        {presentMeanings.has('not_chosen') && (
+          <div className="null-handling-row">
+            <span className="null-handling-icon">&#9745;</span>
+            <div>
+              <strong>Checkbox / multi-select columns</strong>
+              <p>Empty = not selected. Counted in totals automatically.</p>
+            </div>
+          </div>
+        )}
+
+        {presentMeanings.has('not_asked') && (
+          <div className="null-handling-row">
+            <span className="null-handling-icon">&#8631;</span>
+            <div>
+              <strong>Conditional questions (routed)</strong>
+              <p>Empty = respondent not shown this question. Analysis uses only respondents who received it.</p>
+            </div>
+          </div>
+        )}
+
+        {(presentMeanings.has('missing') || presentMeanings.size === 0) && (
+          <div className="null-handling-row">
+            <span className="null-handling-icon">?</span>
+            <div>
+              <strong>Other empty cells</strong>
+              <p>Skipped in calculations. Each analysis uses available responses for that question.</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

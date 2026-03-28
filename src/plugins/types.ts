@@ -3,7 +3,7 @@
  * self-testing, and self-registering.
  */
 
-import type { ChartConfig, Finding, AnalysisLogEntry } from '../types/dataTypes'
+import type { ChartConfig, Finding, AnalysisLogEntry, NullMeaning } from '../types/dataTypes'
 
 // ============================================================
 // Data capabilities — what CapabilityMatcher resolves
@@ -33,6 +33,7 @@ export interface ResolvedColumn {
   id: string
   name: string
   values: (number | string | null)[]
+  nullMeaning?: NullMeaning
 }
 
 export interface ResolvedColumnData {
@@ -42,6 +43,12 @@ export interface ResolvedColumnData {
   segment?: ResolvedColumn
   /** Number of rows */
   n: number
+  /** Canonical respondent count from DatasetNode — used as denominator for 'not_chosen' columns */
+  rowCount?: number
+  /** Respondent weights — when present, analyses should weight observations */
+  weights?: number[]
+  /** Name of the weight column — for display on findings */
+  weightColumnName?: string
 }
 
 // ============================================================

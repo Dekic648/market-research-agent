@@ -229,7 +229,16 @@ const TIMESTAMP_PATTERNS = [
   /^\d{4}[-/]\d{1,2}[-/]\d{1,2}[T ]\d{1,2}:\d{2}/,       // 2024-03-15T10:30 or with space
   /^\d{1,2}:\d{2}(:\d{2})?(\s?[AP]M)?$/i,                 // 10:30, 10:30:00, 10:30 AM
   /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i,   // Jan 15, 2024
+  /^\d{10}$/,                                               // Unix timestamp seconds
+  /^\d{13}$/,                                               // Unix timestamp milliseconds
 ]
+
+/** Check if a 5-digit number is in the Excel serial date range */
+function isExcelSerialDate(str: string): boolean {
+  if (!/^\d{5}$/.test(str)) return false
+  const n = parseInt(str, 10)
+  return n >= 35000 && n <= 55000
+}
 
 /**
  * Detects columns containing date/time values.
@@ -251,12 +260,12 @@ export function checkTimestampColumn(input: CheckInput): DetectionFlag | null {
     if (str === '') continue
     checkedCount++
 
+    let matched = false
     for (const pattern of TIMESTAMP_PATTERNS) {
-      if (pattern.test(str)) {
-        matchCount++
-        break
-      }
+      if (pattern.test(str)) { matched = true; break }
     }
+    if (!matched && isExcelSerialDate(str)) matched = true
+    if (matched) matchCount++
   }
 
   if (checkedCount < 3) return null

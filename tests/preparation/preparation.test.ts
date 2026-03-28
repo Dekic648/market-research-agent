@@ -2,7 +2,7 @@
  * Data Preparation Layer tests.
  */
 import { describe, it, expect } from 'vitest'
-import { computeMissingDiagnostics, littlesMCARTest, applyMissingStrategy } from '../../src/preparation/missingData'
+import { computeMissingDiagnostics, littlesMCARTest, imputeColumnMean } from '../../src/preparation/missingData'
 import { computeVariable, parseFormula } from '../../src/preparation/computeVariable'
 import { computePrepState } from '../../src/preparation/prepState'
 import type { ColumnDefinition } from '../../src/types/dataTypes'
@@ -12,6 +12,7 @@ function makeCol(id: string, name: string, values: (number | string | null)[]): 
     id, name, type: 'rating',
     nRows: values.length,
     nMissing: values.filter((v) => v === null).length,
+    nullMeaning: 'missing',
     rawValues: values, fingerprint: null, semanticDetectionCache: null,
     transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
   }
@@ -60,26 +61,21 @@ describe('littlesMCARTest', () => {
   })
 })
 
-describe('applyMissingStrategy', () => {
-  it('listwise keeps nulls as-is', () => {
-    const result = applyMissingStrategy([1, null, 3, null, 5], 'listwise')
-    expect(result).toEqual([1, null, 3, null, 5])
-  })
-
-  it('pairwise keeps nulls as-is', () => {
-    const result = applyMissingStrategy([1, null, 3], 'pairwise')
-    expect(result).toEqual([1, null, 3])
-  })
-
-  it('mean_imputation replaces nulls with mean', () => {
-    const result = applyMissingStrategy([1, null, 3, null, 5], 'mean_imputation')
+describe('imputeColumnMean', () => {
+  it('replaces nulls with mean of non-null values', () => {
+    const result = imputeColumnMean([1, null, 3, null, 5])
     expect(result).toEqual([1, 3, 3, 3, 5])
   })
 
   it('returns a copy, not mutating original', () => {
-    const original = [1, null, 3]
-    applyMissingStrategy(original, 'mean_imputation')
+    const original: (number | null)[] = [1, null, 3]
+    imputeColumnMean(original)
     expect(original[1]).toBeNull()
+  })
+
+  it('returns unchanged copy for all-null array', () => {
+    const result = imputeColumnMean([null, null, null])
+    expect(result).toEqual([null, null, null])
   })
 })
 
@@ -138,16 +134,27 @@ describe('parseFormula', () => {
 })
 
 describe('computePrepState', () => {
-  it('readyToAnalyze is false without declared strategy', () => {
+  it('readyToAnalyze is true when pendingFlagCount is 0', () => {
     const cols = [makeCol('q1', 'Q1', [1, 2, 3])]
-    const state = computePrepState(cols, null, [])
-    expect(state.readyToAnalyze).toBe(false)
-    expect(state.missingStrategy).toBeNull()
+    const state = computePrepState(cols, [])
+    expect(state.readyToAnalyze).toBe(true)
   })
 
-  it('readyToAnalyze is true with declared strategy', () => {
+  it('readyToAnalyze is false when pendingFlagCount > 0', () => {
     const cols = [makeCol('q1', 'Q1', [1, 2, 3])]
-    const state = computePrepState(cols, 'listwise', [])
+    const flags = [{
+      id: 'f1', type: 'reverse_coded' as const, columnId: 'q1',
+      severity: 'warning' as const, message: 'test', suggestion: 'test',
+    }]
+    const state = computePrepState(cols, flags)
+    expect(state.readyToAnalyze).toBe(false)
+    expect(state.pendingFlagCount).toBe(1)
+  })
+
+  it('readyToAnalyze is true regardless of missing data presence', () => {
+    const cols = [makeCol('q1', 'Q1', [1, null, 3, null, 5])]
+    const state = computePrepState(cols, [])
     expect(state.readyToAnalyze).toBe(true)
+    expect(state.missingDiagnostics!.totalMissing).toBe(2)
   })
 })

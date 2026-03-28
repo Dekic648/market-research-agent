@@ -17,6 +17,7 @@ import { FindingCard } from '../AnalysisDisplay/FindingCard'
 import { ChartContainer } from '../Charts/ChartContainer'
 import { RowFilterBar } from './RowFilterBar'
 import { TYPE_DESCRIPTIONS } from '../DataInput/columnTypeDescriptions'
+import { generateSuggestedQuestions, type SuggestedQuestion } from '../../engine/suggestedQuestions'
 import type { QuestionBlock, ColumnDefinition, Finding } from '../../types/dataTypes'
 import type { PluginStepResult, AnalysisPlugin } from '../../plugins/types'
 import './ExplorerPanel.css'
@@ -58,6 +59,12 @@ export function ExplorerPanel({ blocks }: ExplorerPanelProps) {
 
   const [results, setResults] = useState<ExplorerResult[]>([])
   const [running, setRunning] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(true)
+
+  const suggestedQuestions = useMemo(
+    () => generateSuggestedQuestions(blocks),
+    [blocks]
+  )
 
   // All confirmed columns
   const allColumns = useMemo(() => {
@@ -139,6 +146,53 @@ export function ExplorerPanel({ blocks }: ExplorerPanelProps) {
     }
     return 'Not available for this selection'
   }, [selectedColumns, capabilities])
+
+  // Run a suggested question
+  const handleRunSuggestion = useCallback(async (sq: SuggestedQuestion) => {
+    if (running) return
+    const plugin = AnalysisRegistry.get(sq.pluginId)
+    if (!plugin) return
+
+    // Pre-populate selection
+    for (const colId of sq.columnIds) {
+      const col = allColumns.find((c) => c.id === colId)
+      if (col) addColumn(col)
+    }
+    if (sq.segmentColumnId) {
+      const seg = allColumns.find((c) => c.id === sq.segmentColumnId)
+      if (seg) setSegment(seg)
+    }
+
+    // Build resolved data from the suggestion's columns
+    const resolvedCols = sq.columnIds
+      .map((id) => allColumns.find((c) => c.id === id))
+      .filter((c): c is ColumnDefinition => c !== undefined)
+      .map((col) => ({ id: col.id, name: col.name, values: resolveColumn(col), nullMeaning: col.nullMeaning }))
+
+    const resolvedSeg = sq.segmentColumnId
+      ? (() => { const s = allColumns.find((c) => c.id === sq.segmentColumnId); return s ? { id: s.id, name: s.name, values: resolveColumn(s) } : undefined })()
+      : undefined
+
+    setRunning(true)
+    try {
+      const runner = new InteractiveRunner({
+        data: { columns: resolvedCols, segment: resolvedSeg, n: resolvedCols[0]?.values.length ?? 0 },
+        userId: 'explorer', dataFingerprint: 'suggestion_' + Date.now(),
+        dataVersion: 1, sessionId: 'explorer',
+      })
+      const stepResult = await runner.runOne(plugin)
+      const findings: Finding[] = stepResult.findings.map((fi, idx) => ({
+        id: `suggestion_${sq.pluginId}_${Date.now()}_${idx}`,
+        stepId: sq.pluginId, ...fi, adjustedPValue: null, suppressed: false,
+        priority: idx, createdAt: Date.now(), dataVersion: 1, dataFingerprint: 'suggestion',
+      }))
+      setResults((prev) => [{ id: `res_${Date.now()}`, plugin, result: stepResult, findings, pinned: new Set() }, ...prev])
+    } catch (err) {
+      console.error('Suggestion analysis error:', err)
+    } finally {
+      setRunning(false)
+    }
+  }, [running, allColumns, addColumn, setSegment])
 
   // Run analysis
   const handleRun = useCallback(async (plugin: AnalysisPlugin) => {
@@ -241,6 +295,28 @@ export function ExplorerPanel({ blocks }: ExplorerPanelProps) {
         filteredCount={filteredIndices.length}
         totalCount={allColumns[0]?.nRows ?? 0}
       />
+
+      {/* Suggested questions */}
+      {suggestedQuestions.length > 0 && (
+        <div className="suggested-questions">
+          <button className="suggested-toggle" onClick={() => setShowSuggestions(!showSuggestions)}>
+            {showSuggestions ? 'Hide suggestions' : 'Show suggestions'}
+          </button>
+          {showSuggestions && (
+            <div className="suggested-list">
+              {suggestedQuestions.map((sq, i) => (
+                <div key={i} className="suggested-item">
+                  <div className="suggested-question">{sq.question}</div>
+                  <div className="suggested-desc">{sq.analysisDescription}</div>
+                  <button className="btn btn-primary btn-sm" onClick={() => handleRunSuggestion(sq)} disabled={running}>
+                    Run
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="explorer-grid">
         {/* Zone 1 — Column picker */}

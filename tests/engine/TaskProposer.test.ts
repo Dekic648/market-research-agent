@@ -451,3 +451,75 @@ describe('Full scenario: typical market research dataset', () => {
     expect(crossCorr.length).toBeGreaterThan(0)
   })
 })
+
+// ============================================================
+// Cross-type bridge proposals
+// ============================================================
+
+describe('TaskProposer — cross-type bridge', () => {
+  function makeBehavioralBlock(id: string, name: string, n: number = 50): QuestionBlock {
+    const vals = Array.from({ length: n }, (_, i) => i * 1.5 + Math.random())
+    return {
+      id, label: name, questionType: 'behavioral',
+      columns: [{
+        id: `${id}_c`, name, type: 'behavioral',
+        nRows: n, nMissing: 0, nullMeaning: 'missing',
+        rawValues: vals, fingerprint: null, semanticDetectionCache: null,
+        transformStack: [], sensitivity: 'anonymous', declaredScaleRange: null,
+      }],
+      role: 'question', confirmed: true, pastedAt: Date.now(),
+    }
+  }
+
+  it('proposes correlation with source cross_type_bridge when rating + behavioral exist', () => {
+    const blocks = [
+      makeBlock('r1', 'Satisfaction', 'rating', 1),
+      makeBehavioralBlock('b1', 'games_played'),
+      makeSegmentBlock('seg1', 50),
+    ]
+    const tasks = proposeTasks(blocks)
+    const bridgeTasks = tasks.filter((t) => t.source === 'cross_type_bridge')
+    expect(bridgeTasks.length).toBeGreaterThan(0)
+    expect(bridgeTasks.some((t) => t.pluginId === 'correlation')).toBe(true)
+  })
+
+  it('proposes driver_analysis with source cross_type_bridge when outcome keyword + 2+ ratings exist', () => {
+    const blocks = [
+      makeBlock('r1', 'Trust', 'rating', 1),
+      makeBlock('r2', 'Quality', 'rating', 1),
+      makeBehavioralBlock('b1', 'gross_revenue'),
+      makeSegmentBlock('seg1', 50),
+    ]
+    const tasks = proposeTasks(blocks)
+    const bridgeDrivers = tasks.filter((t) => t.source === 'cross_type_bridge' && t.pluginId === 'driver_analysis')
+    expect(bridgeDrivers.length).toBe(1)
+    expect(bridgeDrivers[0].label).toContain('gross_revenue')
+  })
+
+  it('unconfirmed blocks are excluded from bridge proposals', () => {
+    const unconfirmedRating: QuestionBlock = {
+      ...makeBlock('r1', 'Satisfaction', 'rating', 1),
+      confirmed: false,
+    }
+    const blocks = [
+      unconfirmedRating,
+      makeBehavioralBlock('b1', 'games_played'),
+      makeSegmentBlock('seg1', 50),
+    ]
+    const tasks = proposeTasks(blocks)
+    const bridgeTasks = tasks.filter((t) => t.source === 'cross_type_bridge')
+    expect(bridgeTasks).toHaveLength(0)
+  })
+
+  it('total cross-type bridge proposals do not exceed 10', () => {
+    // Many blocks — should cap
+    const blocks = [
+      ...Array.from({ length: 5 }, (_, i) => makeBlock(`r${i}`, `Rating ${i}`, 'rating', 1)),
+      ...Array.from({ length: 5 }, (_, i) => makeBehavioralBlock(`b${i}`, `metric_${i}`)),
+      makeSegmentBlock('seg1', 50),
+    ]
+    const tasks = proposeTasks(blocks)
+    const bridgeTasks = tasks.filter((t) => t.source === 'cross_type_bridge')
+    expect(bridgeTasks.length).toBeLessThanOrEqual(10)
+  })
+})

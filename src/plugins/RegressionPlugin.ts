@@ -10,6 +10,17 @@ import type {
 } from './types'
 import type { ChartConfig } from '../types/dataTypes'
 
+interface KFoldCVResult {
+  k: number
+  meanR2orAUC: number
+  sdR2orAUC: number
+  meanRMSE: number
+  sdRMSE: number
+  overfit: boolean
+  overfitDelta: number
+  foldResults: Array<{ fold: number; trainN: number; testN: number; trainMetric: number; testMetric: number; testRMSE: number }>
+}
+
 interface RegressionResultData {
   R2: number
   adjR2: number
@@ -20,6 +31,7 @@ interface RegressionResultData {
   durbinWatson: number
   n: number
   nPredictors: number
+  cv?: KFoldCVResult
 }
 
 function standardize(arr: number[]): number[] {
@@ -91,6 +103,7 @@ const RegressionPlugin: AnalysisPlugin = {
     const xs = xsRaw.map((x) => valid.map((i) => x[i]))
 
     // @ts-ignore
+    // TODO: add weights support to linearRegression()
     const regRaw = StatsEngine.linearRegression(y, xs)
     if (regRaw.error) throw new Error(regRaw.error)
     const reg = regRaw as { coefficients: number[]; se: number[]; tStats: number[]; pValues: number[]; R2: number; adjR2: number; F: number; fP: number; RMSE: number; durbinWatson: number; residuals: number[] }
@@ -129,7 +142,33 @@ const RegressionPlugin: AnalysisPlugin = {
       values: number[]; threshold: number; influentialCount: number; influentialIndices: number[]; error?: string
     }
 
+    // K-fold cross-validation (only if n >= 30)
+    let cv: KFoldCVResult | undefined
+    if (y.length >= 30) {
+      // @ts-ignore
+      const cvResult = StatsEngine.kFoldCVLinear(y, xs, 5)
+      if (!cvResult.error) {
+        cv = cvResult
+        result.cv = cv
+      }
+    }
+
     const findingFlags: Array<{ type: string; severity: 'info' | 'warning'; detail: Record<string, unknown>; message: string }> = []
+
+    // Overfit warning from CV
+    if (cv?.overfit) {
+      findingFlags.push({
+        type: 'overfit_warning',
+        severity: 'warning',
+        detail: {
+          trainingR2: reg.R2,
+          cvR2: cv.meanR2orAUC,
+          delta: cv.overfitDelta,
+        },
+        message: `Model R² is ${reg.R2.toFixed(2)} on training data but ${cv.meanR2orAUC.toFixed(2)} on held-out data. The model may be overfitting.`,
+      })
+    }
+
     if (cooks.influentialCount > 0) {
       const severity = cooks.influentialCount / y.length > 0.05 ? 'warning' as const : 'info' as const
       findingFlags.push({
@@ -182,11 +221,25 @@ const RegressionPlugin: AnalysisPlugin = {
     const sigPredictors = predictors.filter((c) => c.p < 0.05).sort((a, b) => Math.abs(b.beta) - Math.abs(a.beta))
     const r2Pct = (r.R2 * 100).toFixed(0)
     const outcomeName = (res.data as any).outcomeName ?? 'the outcome'
+
+    let cvNote = ''
+    if (r.cv) {
+      const cvPct = (r.cv.meanR2orAUC * 100).toFixed(0)
+      if (r.cv.overfit) {
+        cvNote = ` The model explains ${r2Pct}% in training data but only ${cvPct}% on held-out data — interpret with caution.`
+      } else {
+        cvNote = ` (${cvPct}% on held-out data — generalises well).`
+      }
+    }
+
     if (sigPredictors.length === 0) {
-      return `The model explains ${r2Pct}% of the variation in ${outcomeName}, but no individual predictor reaches significance.`
+      return `The model explains ${r2Pct}% of the variation in ${outcomeName}, but no individual predictor reaches significance.${cvNote}`
     }
     const top = sigPredictors[0]
-    return `${top.name} is the strongest predictor of ${outcomeName} (beta = ${top.beta.toFixed(2)}, p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}). The model explains ${r2Pct}% of the variation.`
+    if (r.cv && !r.cv.overfit) {
+      return `${top.name} is the strongest predictor of ${outcomeName} (beta = ${top.beta.toFixed(2)}, p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}). The model explains ${r2Pct}% of the variation${cvNote}`
+    }
+    return `${top.name} is the strongest predictor of ${outcomeName} (beta = ${top.beta.toFixed(2)}, p ${top.p < 0.001 ? '< .001' : '= ' + top.p.toFixed(3)}). The model explains ${r2Pct}% of the variation.${cvNote}`
   },
 }
 

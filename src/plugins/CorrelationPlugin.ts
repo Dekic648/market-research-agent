@@ -65,6 +65,7 @@ const CorrelationPlugin: AnalysisPlugin = {
     )
 
     // @ts-ignore
+    // TODO: add weights support to correlationMatrix()
     const cm = StatsEngine.correlationMatrix(items) as { r: number[][]; p: number[][]; k: number }
 
     const strongPairs: CorrelationResult['strongPairs'] = []

@@ -1,0 +1,74 @@
+/* SubgroupBar */
+.subgroup-bar {
+  padding: 10px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.subgroup-active, .subgroup-default {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.subgroup-badge {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: var(--teal-bg);
+  color: var(--teal-text);
+}
+
+.subgroup-badge-default {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.subgroup-auto-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--purple-bg);
+  color: var(--purple-text);
+}
+
+.subgroup-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subgroup-form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.subgroup-form-row label {
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 50px;
+}
+
+.subgroup-label-input {
+  width: 160px;
+}
+
+.subgroup-preview {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.subgroup-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}

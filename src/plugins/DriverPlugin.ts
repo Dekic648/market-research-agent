@@ -116,6 +116,18 @@ const DriverPlugin: AnalysisPlugin = {
     const charts = [buildDriverChart(result)]
     const topDriver = result.predictors[0]
 
+    // K-fold cross-validation
+    let cvR2: number | null = null
+    let cvOverfit = false
+    if (y.length >= 30) {
+      // @ts-ignore
+      const cvResult = StatsEngine.kFoldCVLinear(y, xs, 5)
+      if (!cvResult.error) {
+        cvR2 = cvResult.meanR2orAUC
+        cvOverfit = cvResult.overfit
+      }
+    }
+
     // Cook's Distance
     // @ts-ignore
     const cooks = StatsEngine.cooksDistance(y, xs, regRaw) as {
@@ -123,6 +135,16 @@ const DriverPlugin: AnalysisPlugin = {
     }
 
     const findingFlags: Array<{ type: string; severity: 'info' | 'warning'; detail: Record<string, unknown>; message: string }> = []
+
+    if (cvOverfit && cvR2 !== null) {
+      findingFlags.push({
+        type: 'overfit_warning',
+        severity: 'warning',
+        detail: { trainingR2: result.R2, cvR2, delta: result.R2 - cvR2 },
+        message: `Model R² is ${result.R2.toFixed(2)} on training data but ${cvR2.toFixed(2)} on held-out data. Driver rankings may not generalise.`,
+      })
+    }
+
     if (cooks.influentialCount > 0) {
       const severity = cooks.influentialCount / y.length > 0.05 ? 'warning' as const : 'info' as const
       findingFlags.push({

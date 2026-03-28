@@ -201,6 +201,163 @@ export function proposeTasks(
     })
   }
 
+  // Temporal × continuous: trend over time and time segment comparison
+  const temporalBlocks = questions.filter((b) => b.questionType === 'timestamped' && b.columns.length >= 1)
+  const numericBlocks = questions.filter(
+    (b) => (b.questionType === 'rating' || b.questionType === 'matrix' || b.questionType === 'behavioral')
+      && b.columns.length >= 1
+  )
+  if (temporalBlocks.length > 0 && numericBlocks.length > 0) {
+    for (const tsBlock of temporalBlocks) {
+      for (const numBlock of numericBlocks) {
+        const tsRef = ref(tsBlock.id, tsBlock.columns[0].id)
+        // For each numeric column, propose trend + time segment comparison
+        for (const numCol of numBlock.columns) {
+          const numRef = ref(numBlock.id, numCol.id)
+
+          if (pluginExists('trend_over_time')) {
+            tasks.push({
+              id: nextId('trend_over_time'),
+              pluginId: 'trend_over_time',
+              label: `Trend: ${numCol.name} over time`,
+              inputs: { columns: [tsRef, numRef] },
+              sourceQuestionIds: [tsBlock.id, numBlock.id],
+              dependsOn: [],
+              proposedBy: 'system',
+              reason: `Timestamp column "${tsBlock.label}" paired with numeric "${numCol.name}" → trend analysis`,
+              status: 'proposed',
+            })
+          }
+
+          if (pluginExists('time_segment_comparison')) {
+            tasks.push({
+              id: nextId('time_segment_comparison'),
+              pluginId: 'time_segment_comparison',
+              label: `Time comparison: ${numCol.name} by period`,
+              inputs: { columns: [tsRef, numRef] },
+              sourceQuestionIds: [tsBlock.id, numBlock.id],
+              dependsOn: [],
+              proposedBy: 'system',
+              reason: `Timestamp column "${tsBlock.label}" paired with numeric "${numCol.name}" → period comparison`,
+              status: 'proposed',
+            })
+          }
+        }
+      }
+    }
+  }
+
+  // Mediation: 3 continuous columns where one is a plausible outcome
+  const outcomeKeywords = ['satisfaction', 'nps', 'rating', 'score', 'overall', 'loyalty', 'intent']
+  const continuousForMediation = questions.filter(
+    (b) => (b.questionType === 'rating' || b.questionType === 'behavioral' || b.questionType === 'matrix')
+      && b.columns.length === 1
+  )
+  if (continuousForMediation.length >= 3 && pluginExists('mediation')) {
+    const outcomeCandidates = continuousForMediation.filter((b) =>
+      outcomeKeywords.some((kw) => b.label.toLowerCase().includes(kw))
+    )
+    const outcomeBlock = outcomeCandidates[0] ?? continuousForMediation[continuousForMediation.length - 1]
+    const others = continuousForMediation.filter((b) => b.id !== outcomeBlock.id)
+    if (others.length >= 2) {
+      tasks.push({
+        id: nextId('mediation'),
+        pluginId: 'mediation',
+        label: `Mediation: ${others[0].label} → ${others[1].label} → ${outcomeBlock.label}`,
+        inputs: {
+          columns: [
+            ref(others[0].id, others[0].columns[0].id),
+            ref(others[1].id, others[1].columns[0].id),
+            ref(outcomeBlock.id, outcomeBlock.columns[0].id),
+          ],
+        },
+        sourceQuestionIds: [others[0].id, others[1].id, outcomeBlock.id],
+        dependsOn: [],
+        proposedBy: 'system',
+        reason: `Three continuous variables with "${outcomeBlock.label}" as plausible outcome → mediation analysis`,
+        status: 'proposed',
+      })
+    }
+  }
+
+  // Survey × Behavioral bridge
+  const surveyBridgeBlocks = questions.filter((b) =>
+    ['rating', 'matrix', 'checkbox'].includes(b.questionType) && b.confirmed
+  )
+  const behavioralBridgeBlocks = questions.filter((b) =>
+    b.questionType === 'behavioral' && b.confirmed
+  )
+
+  if (surveyBridgeBlocks.length > 0 && behavioralBridgeBlocks.length > 0) {
+    let bridgeCount = 0
+    const BRIDGE_CAP = 10
+    const BRIDGE_OUTCOME_KW = ['revenue', 'spend', 'purchase', 'gross', 'ltv', 'value',
+      'nps', 'score', 'rating', 'satisfaction', 'retention', 'churn']
+
+    // Rule 1: correlation for behavioral × rating pairs (max 3 each side)
+    const topBehavioral = behavioralBridgeBlocks.slice(0, 3)
+    const topSurvey = surveyBridgeBlocks
+      .filter((b) => b.questionType === 'rating' || b.questionType === 'matrix')
+      .slice(0, 3)
+
+    if (pluginExists('correlation')) {
+      for (const bBlock of topBehavioral) {
+        for (const sBlock of topSurvey) {
+          if (bridgeCount >= BRIDGE_CAP) break
+          tasks.push({
+            id: nextId('correlation'),
+            pluginId: 'correlation',
+            label: `Bridge: ${bBlock.columns[0].name} × ${sBlock.columns[0].name}`,
+            inputs: {
+              columns: [ref(bBlock.id, bBlock.columns[0].id), ref(sBlock.id, sBlock.columns[0].id)],
+            },
+            sourceQuestionIds: [bBlock.id, sBlock.id],
+            dependsOn: [],
+            proposedBy: 'system',
+            reason: `Survey × behavioral bridge: correlate survey rating with behavioral metric`,
+            source: 'cross_type_bridge',
+            status: 'proposed',
+          })
+          bridgeCount++
+        }
+      }
+    }
+
+    // Rule 2: driver analysis — survey ratings predict behavioral outcome
+    if (pluginExists('driver_analysis') && bridgeCount < BRIDGE_CAP) {
+      const bridgeOutcome = behavioralBridgeBlocks.find((b) =>
+        BRIDGE_OUTCOME_KW.some((kw) => b.columns[0].name.toLowerCase().includes(kw))
+      )
+      const ratingPredictors = surveyBridgeBlocks
+        .filter((b) => b.questionType === 'rating' || b.questionType === 'matrix')
+        .flatMap((b) => b.columns)
+        .slice(0, 8)
+
+      if (bridgeOutcome && ratingPredictors.length >= 2) {
+        const predRefs = ratingPredictors.map((c) => {
+          const block = surveyBridgeBlocks.find((b) => b.columns.some((bc) => bc.id === c.id))
+          return ref(block!.id, c.id)
+        })
+        tasks.push({
+          id: nextId('driver_analysis'),
+          pluginId: 'driver_analysis',
+          label: `Bridge: What drives ${bridgeOutcome.columns[0].name}?`,
+          inputs: {
+            columns: predRefs,
+            outcome: ref(bridgeOutcome.id, bridgeOutcome.columns[0].id),
+          },
+          sourceQuestionIds: [bridgeOutcome.id, ...surveyBridgeBlocks.map((b) => b.id)],
+          dependsOn: [],
+          proposedBy: 'system',
+          reason: `Survey ratings as predictors of behavioral outcome "${bridgeOutcome.columns[0].name}" → driver analysis`,
+          source: 'cross_type_bridge',
+          status: 'proposed',
+        })
+        bridgeCount++
+      }
+    }
+  }
+
   // ---- Pass 3: Dependency wiring ----
   wireDependencies(tasks)
 
@@ -287,65 +444,65 @@ const WITHIN_QUESTION_RULES: Partial<Record<QuestionType, QuestionRules>> = {
     withSegment: ['crosstab', 'kw_significance', 'segment_profile'],
     withMultipleItems: ['cronbach', 'correlation'],
     withManyItems: ['efa'],
-    never: [],
+    never: ['power_analysis'],
   },
   matrix: {
     always: ['frequency'],
     withSegment: ['crosstab', 'kw_significance', 'segment_profile'],
     withMultipleItems: ['cronbach', 'correlation'],
     withManyItems: ['efa'],
-    never: [],
+    never: ['power_analysis'],
   },
   checkbox: {
     always: ['frequency'],
     withSegment: ['crosstab'],
     withMultipleItems: [],
-    never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa'],
+    never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa', 'power_analysis'],
   },
   radio: {
     always: ['frequency'],
     withSegment: ['crosstab', 'kw_significance'],
     withMultipleItems: [],
-    never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa'],
+    never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa', 'power_analysis'],
   },
   category: {
     always: ['frequency'],
     withSegment: ['crosstab'],
     withMultipleItems: [],
-    never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa'],
+    never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa', 'power_analysis'],
   },
   behavioral: {
     always: [],
     withSegment: [],
     withMultipleItems: ['correlation'],
     never: ['frequency', 'crosstab', 'kw_significance',
-            'cronbach', 'efa', 'segment_profile', 'posthoc'],
+            'cronbach', 'efa', 'segment_profile', 'posthoc', 'power_analysis'],
   },
   verbatim: {
     always: [],
     withSegment: [],
     withMultipleItems: [],
     never: ['frequency', 'cronbach', 'correlation', 'regression', 'driver_analysis',
-            'efa', 'crosstab', 'kw_significance', 'posthoc', 'segment_profile', 'point_biserial'],
+            'efa', 'crosstab', 'kw_significance', 'posthoc', 'segment_profile', 'point_biserial', 'power_analysis'],
   },
   timestamped: {
-    always: [],
+    always: ['period_frequency'],
     withSegment: [],
     withMultipleItems: [],
-    never: ['frequency', 'cronbach', 'efa'],
+    never: ['frequency', 'cronbach', 'efa', 'power_analysis'],
   },
   multi_assigned: {
     always: ['frequency'],
     withSegment: ['crosstab'],
     withMultipleItems: [],
-    never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa'],
+    never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa', 'power_analysis'],
   },
   weight: {
     always: [],
     withSegment: [],
     withMultipleItems: [],
     never: ['frequency', 'cronbach', 'correlation', 'regression', 'driver_analysis',
-            'efa', 'crosstab', 'kw_significance', 'posthoc', 'segment_profile', 'point_biserial'],
+            'efa', 'crosstab', 'kw_significance', 'posthoc', 'segment_profile', 'point_biserial', 'power_analysis'],
   },
 }
 

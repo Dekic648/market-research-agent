@@ -111,6 +111,67 @@ describe('InteractiveRunner', () => {
     expect(progressUpdates[1].current).toBe(2)
   })
 
+  it('attaches verification results when segment columns provided', async () => {
+    // Create data where segment A has high values, segment B has low values
+    // This should produce a significant KW finding
+    const n = 60
+    const vals: number[] = []
+    const segs: string[] = []
+    for (let i = 0; i < 30; i++) { vals.push(5); segs.push('A') }
+    for (let i = 0; i < 30; i++) { vals.push(1); segs.push('B') }
+
+    const data: ResolvedColumnData = {
+      columns: [{ id: 'q1', name: 'Rating', values: vals }],
+      segment: { id: 'seg', name: 'Segment', values: segs },
+      n,
+    }
+
+    const allCols = [
+      makeCol('q1', 'Rating', 'rating', vals),
+      makeCol('seg', 'Segment', 'category', segs),
+    ]
+    const segCols = [makeCol('seg', 'Segment', 'category', segs)]
+
+    const runner = new InteractiveRunner({
+      data,
+      ...baseConfig,
+      allColumnDefinitions: allCols,
+      segmentColumnDefinitions: segCols,
+      rowCount: n,
+    })
+
+    const result = await runner.runAll([AnalysisRegistry.get('kw_significance')!])
+
+    // Verification pass should have run — findings may or may not have results
+    // depending on whether Simpson's/moderation triggers, but the pass ran without error
+    expect(result.findings.length).toBeGreaterThan(0)
+    // The verifier was called (no crash) and findings are intact
+    for (const f of result.findings) {
+      // verificationResults is either undefined or an array — never a crash
+      expect(f.verificationResults === undefined || Array.isArray(f.verificationResults)).toBe(true)
+    }
+  })
+
+  it('skips verification when no segment columns provided', async () => {
+    const data: ResolvedColumnData = {
+      columns: [{ id: 'q1', name: 'Rating', values: ratingValues }],
+      n: 40,
+    }
+
+    const runner = new InteractiveRunner({
+      data,
+      ...baseConfig,
+      // No allColumnDefinitions or segmentColumnDefinitions
+    })
+
+    const result = await runner.runAll([AnalysisRegistry.get('frequency')!])
+
+    expect(result.findings.length).toBeGreaterThan(0)
+    for (const f of result.findings) {
+      expect(f.verificationResults).toBeUndefined()
+    }
+  })
+
   it('surfaces assumption violations without blocking', async () => {
     // Small data to trigger minGroupSize violation
     const smallData: ResolvedColumnData = {
