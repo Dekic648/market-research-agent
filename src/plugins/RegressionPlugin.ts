@@ -227,9 +227,29 @@ const RegressionPlugin: AnalysisPlugin = {
 
     const topSigPredictor = sigPredictors.sort((a, b) => Math.abs(b.beta) - Math.abs(a.beta))[0]
     const r2Pct = (reg.R2 * 100).toFixed(0)
-    const summaryLanguage = topSigPredictor
-      ? `${topSigPredictor.name} is the strongest predictor of ${outcome.name} — it alone accounts for ${r2Pct}% of the variation.`
-      : `No single factor stands out as a clear predictor of ${outcome.name} — the model explains ${r2Pct}% of the variation.`
+
+    let summaryLanguage: string
+    if (reg.R2 < 0.05) {
+      summaryLanguage = `The predictors explain very little of the variation in ${outcome.name} (${r2Pct}%) — these factors are not strongly driving ${outcome.name}.`
+    } else if (reg.R2 < 0.15) {
+      summaryLanguage = topSigPredictor
+        ? `${topSigPredictor.name} shows a modest relationship with ${outcome.name} — the predictors account for ${r2Pct}% of the variation.`
+        : `The predictors show a modest relationship with ${outcome.name} (${r2Pct}% of variation).`
+    } else {
+      summaryLanguage = topSigPredictor
+        ? `${topSigPredictor.name} is the strongest predictor of ${outcome.name} — it accounts for ${r2Pct}% of the variation.`
+        : `The model explains ${r2Pct}% of the variation in ${outcome.name}.`
+    }
+
+    // Weak model warning flag
+    if (reg.R2 < 0.05) {
+      findingFlags.push({
+        type: 'weak_model',
+        severity: 'warning',
+        detail: { R2: reg.R2 },
+        message: `Model fit is weak (R² = ${r2Pct}%). These predictors account for very little of the variation in ${outcome.name}. Interpret individual coefficients cautiously.`,
+      })
+    }
 
     const findings = [{
       type: 'regression',

@@ -156,9 +156,29 @@ const DriverPlugin: AnalysisPlugin = {
     }
 
     const driverR2Pct = (result.R2 * 100).toFixed(0)
-    const driverSummaryLanguage = topDriver
-      ? `${topDriver.name} is the strongest predictor of ${outcome.name} — it alone accounts for ${(topDriver.importance * 100).toFixed(0)}% of the variation.`
-      : `No single factor stands out as a clear driver of ${outcome.name}.`
+
+    let driverSummaryLanguage: string
+    if (result.R2 < 0.05) {
+      driverSummaryLanguage = `The measured attributes explain very little of the variation in ${outcome.name} (${driverR2Pct}%) — other factors are likely at play.`
+    } else if (result.R2 < 0.15) {
+      driverSummaryLanguage = topDriver
+        ? `${topDriver.name} shows a modest relationship with ${outcome.name} — the attributes account for ${driverR2Pct}% of the variation.`
+        : `The attributes show a modest relationship with ${outcome.name} (${driverR2Pct}% of variation).`
+    } else {
+      driverSummaryLanguage = topDriver
+        ? `${topDriver.name} is the strongest driver of ${outcome.name} — it accounts for ${(topDriver.importance * 100).toFixed(0)}% of the explained variation.`
+        : `No single factor stands out as a clear driver of ${outcome.name}.`
+    }
+
+    // Weak model warning flag
+    if (result.R2 < 0.05) {
+      findingFlags.push({
+        type: 'weak_model',
+        severity: 'warning',
+        detail: { R2: result.R2 },
+        message: `Model fit is weak (R² = ${driverR2Pct}%). These predictors account for very little of the variation in ${outcome.name}. Driver rankings may not be reliable.`,
+      })
+    }
 
     const findings = [{
       type: 'driver',

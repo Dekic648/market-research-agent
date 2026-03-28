@@ -262,6 +262,68 @@ function buildDivergingStackedBar(
   }
 }
 
+function buildGroupedBarBySegment(
+  col: ResolvedColumn,
+  segment: ResolvedColumn,
+  columnName: string
+): ChartConfig {
+  // Compute % per segment per response option
+  const segGroups = new Map<string | number, Map<string | number, number>>()
+  const segCounts = new Map<string | number, number>()
+
+  for (let i = 0; i < col.values.length; i++) {
+    const seg = segment.values[i]
+    const val = col.values[i]
+    if (seg === null || val === null) continue
+    if (!segGroups.has(seg)) { segGroups.set(seg, new Map()); segCounts.set(seg, 0) }
+    segCounts.set(seg, (segCounts.get(seg) ?? 0) + 1)
+    const valMap = segGroups.get(seg)!
+    valMap.set(val, (valMap.get(val) ?? 0) + 1)
+  }
+
+  // Get all unique response values sorted
+  const allValues = new Set<string | number>()
+  for (const [, valMap] of segGroups) {
+    for (const v of valMap.keys()) allValues.add(v)
+  }
+  const sortedValues = Array.from(allValues).sort((a, b) => {
+    const na = typeof a === 'number' ? a : parseFloat(String(a))
+    const nb = typeof b === 'number' ? b : parseFloat(String(b))
+    if (!isNaN(na) && !isNaN(nb)) return na - nb
+    return String(a).localeCompare(String(b))
+  })
+
+  const segLabels = Array.from(segGroups.keys())
+  const traces = segLabels.map((seg, i) => {
+    const valMap = segGroups.get(seg)!
+    const total = segCounts.get(seg) ?? 1
+    return {
+      name: String(seg),
+      type: 'bar',
+      x: sortedValues.map(String),
+      y: sortedValues.map((v) => ((valMap.get(v) ?? 0) / total) * 100),
+      marker: { color: brandColors[i % brandColors.length] },
+    }
+  })
+
+  return {
+    id: `freq_grouped_${col.id}_${Date.now()}`,
+    type: 'groupedBar',
+    data: traces,
+    layout: {
+      ...baseLayout,
+      barmode: 'group',
+      title: { text: `${columnName} — % by ${segment.name}` },
+      yaxis: { title: { text: '% of segment' }, range: [0, 100] },
+      xaxis: { title: { text: 'Response' } },
+      showlegend: true,
+    },
+    config: baseConfig,
+    stepId: 'frequency',
+    edits: {},
+  }
+}
+
 // ============================================================
 // Plugin definition
 // ============================================================
@@ -290,15 +352,28 @@ const FrequencyPlugin: AnalysisPlugin = {
 
     const charts: ChartConfig[] = []
 
-    // Individual bar charts
-    for (const freq of frequencies) {
-      charts.push(buildHorizontalBarChart(freq))
-    }
+    // Matrix/checkbox × segment enforcement: always grouped bar chart
+    const hasSegment = !!data.segment
+    const isMatrixOrCheckbox = data.columns.some((c) =>
+      (c as any).format === 'matrix' || (c as any).format === 'multi_response'
+    )
 
-    // Diverging stacked bar if multiple ordinal columns
-    if (frequencies.length >= 2) {
-      const diverging = buildDivergingStackedBar(frequencies)
-      if (diverging) charts.unshift(diverging)
+    if (hasSegment && isMatrixOrCheckbox && data.segment) {
+      // Grouped bar chart per column showing % per segment
+      for (const col of data.columns) {
+        charts.push(buildGroupedBarBySegment(col, data.segment, col.name))
+      }
+    } else {
+      // Default charts
+      for (const freq of frequencies) {
+        charts.push(buildHorizontalBarChart(freq))
+      }
+
+      // Diverging stacked bar if multiple ordinal columns
+      if (frequencies.length >= 2) {
+        const diverging = buildDivergingStackedBar(frequencies)
+        if (diverging) charts.unshift(diverging)
+      }
     }
 
     // Generate findings

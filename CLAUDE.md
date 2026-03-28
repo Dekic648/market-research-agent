@@ -2,7 +2,7 @@
 ## Market Research Agent — Current State
 
 > **Last updated:** 2026-03-28
-> **Test count:** 788 passing across 61 test files
+> **Test count:** 796 passing across 62 test files
 > **Plugins:** 22 built and registered
 > **Deploy:** Vercel at market-research-agent-iota.vercel.app
 
@@ -265,6 +265,11 @@ Unchanged. Each adapter requires sample data files before building.
 - `checkModeration()` — effect size variation across strata
 - Wired into both HeadlessRunner and InteractiveRunner
 - `attachVerificationResult()` on FindingsStore
+
+### Production fixes (v12)
+- **Weak model threshold**: R² < 0.05 → summaryLanguage does not name "strongest predictor", says "very little variation explained". Yellow warning flag on FindingCard. R² 0.05–0.15 → "modest relationship". Same for DriverPlugin.
+- **Cross-type proposals verified**: Tier 2 generates KW tasks for behavioral metric × survey segment AND survey ordinal × behavioral dimension, both with crossType: true. Tier 3 generates Spearman correlation for survey × behavioral pairs.
+- **Matrix/checkbox grouped bar enforcement**: When segment present and columns are matrix/multi_response format, FrequencyPlugin forces grouped bar chart showing % per response option per segment (within-segment denominator). Overrides default horizontal bar and diverging stacked bar.
 
 ### Two-layer language system (v12)
 - **plainLanguage** — detailed, for finding cards in results view. May include test names, effect sizes, caveats.
