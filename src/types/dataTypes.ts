@@ -73,6 +73,7 @@ export type TransformType =
   | 'zScore'
   | 'winsorize'
   | 'interactionTerm'
+  | 'singleValueOverride'
 
 export interface Transform {
   id: string

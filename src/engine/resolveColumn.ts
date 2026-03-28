@@ -110,6 +110,9 @@ function applyTransform(
       // InteractionTerm also needs two columns — handled at store level.
       return values
 
+    case 'singleValueOverride':
+      return applySingleValueOverride(values, transform.params)
+
     default:
       return values
   }
@@ -219,4 +222,16 @@ function applyWinsorize(
     if (n > upperBound) return upperBound
     return n
   })
+}
+
+/** Override a single cell value at a specific row index */
+function applySingleValueOverride(
+  values: (number | string | null)[],
+  params: { rowIndex: number; originalValue: number | string | null; newValue: number | string | null }
+): (number | string | null)[] {
+  const { rowIndex, newValue } = params
+  if (rowIndex < 0 || rowIndex >= values.length) return values
+  const result = values.slice()
+  result[rowIndex] = newValue
+  return result
 }

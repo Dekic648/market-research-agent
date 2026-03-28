@@ -95,6 +95,16 @@ export interface InteractionTermTransform extends BaseTransform {
   }
 }
 
+/** Override a single cell value by row index */
+export interface SingleValueOverrideTransform extends BaseTransform {
+  type: 'singleValueOverride'
+  params: {
+    rowIndex: number
+    originalValue: number | string | null
+    newValue: number | string | null
+  }
+}
+
 // ============================================================
 // Union type
 // ============================================================
@@ -108,3 +118,4 @@ export type TypedTransform =
   | ZScoreTransform
   | WinsorizeTransform
   | InteractionTermTransform
+  | SingleValueOverrideTransform
