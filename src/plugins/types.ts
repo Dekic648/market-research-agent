@@ -107,6 +107,7 @@ export interface AnalysisPlugin {
   priority: number                  // lower = runs earlier in flow
 
   requires: DataCapability[]
+  forbids?: DataCapability[]        // plugin excluded if ANY of these capabilities present
   dependsOn?: string[]              // plugin IDs that must run first
 
   preconditions: Validator[]

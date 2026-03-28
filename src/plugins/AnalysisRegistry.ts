@@ -19,13 +19,16 @@ export const AnalysisRegistry = {
 
   /**
    * Query for runnable plugins given a set of data capabilities.
-   * Returns plugins whose `requires` are all satisfied, ordered by priority.
+   * Returns plugins where ALL requires are present AND NONE of forbids are present.
    */
   query(capabilities: CapabilitySet): AnalysisPlugin[] {
     return plugins
-      .filter((plugin) =>
-        plugin.requires.every((req) => capabilities.has(req))
-      )
+      .filter((plugin) => {
+        const requiresMet = plugin.requires.every((req) => capabilities.has(req))
+        if (!requiresMet) return false
+        const forbidden = plugin.forbids?.some((f) => capabilities.has(f)) ?? false
+        return !forbidden
+      })
       .sort((a, b) => a.priority - b.priority)
   },
 

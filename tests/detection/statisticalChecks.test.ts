@@ -321,6 +321,33 @@ describe('checkCollapsedCategories', () => {
     })
     expect(flag).toBeNull()
   })
+
+  it('raises critical severity when values fall outside declared scale range', () => {
+    const flag = checkCollapsedCategories({
+      columnId: 'q1',
+      columnName: 'Q1',
+      values: [1, 2, 3, 4, 5, 7, 1, 2, 3, 99],
+      declaredScaleRange: [1, 5],
+    })
+
+    expect(flag).not.toBeNull()
+    expect(flag!.severity).toBe('critical')
+    expect(flag!.detail.outOfRange).toBe(2) // 7 and 99
+    expect(flag!.message).toContain('outside')
+  })
+
+  it('keeps info severity when all values within range but points missing', () => {
+    const flag = checkCollapsedCategories({
+      columnId: 'q1',
+      columnName: 'Q1',
+      values: [1, 3, 5, 1, 3, 5, 1, 3, 5, 1],
+      declaredScaleRange: [1, 5],
+    })
+
+    expect(flag).not.toBeNull()
+    expect(flag!.severity).toBe('info')
+    expect(flag!.detail.outOfRange).toBe(0)
+  })
 })
 
 // ============================================================

@@ -143,6 +143,7 @@ const PostHocPlugin: AnalysisPlugin = {
   priority: 40,
 
   requires: ['ordinal', 'segment'],
+  forbids: ['binary'],
   dependsOn: ['kw_significance'],
   preconditions: [],
 

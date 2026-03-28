@@ -59,6 +59,7 @@ const DriverPlugin: AnalysisPlugin = {
   desc: 'Identifies which factors most strongly drive the outcome variable.',
   priority: 75,
   requires: ['continuous', 'n>30'],
+  forbids: ['binary'],
   dependsOn: ['regression'],
   preconditions: [],
   produces: { description: 'Ranked predictors by relative importance', fields: { result: 'DriverResult' } } satisfies OutputContract,

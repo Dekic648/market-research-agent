@@ -157,6 +157,7 @@ const SignificancePlugin: AnalysisPlugin = {
   priority: 30,
 
   requires: ['ordinal', 'segment'],
+  forbids: ['binary'],
   preconditions: [minGroupSize],
 
   produces: {

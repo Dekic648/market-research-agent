@@ -63,6 +63,7 @@ const RegressionPlugin: AnalysisPlugin = {
   desc: 'OLS regression with standardized betas and importance ranking.',
   priority: 70,
   requires: ['continuous', 'n>30'],
+  forbids: ['binary'],
   preconditions: [],
   produces: { description: 'R², coefficients, standardized betas', fields: { result: 'RegressionResultData' } } satisfies OutputContract,
 

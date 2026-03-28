@@ -364,13 +364,36 @@ export function checkCollapsedCategories(input: CheckInput): DetectionFlag | nul
   }
 
   if (uniqueNums.size === 0) return null
-  if (uniqueNums.size >= expectedPoints) return null
 
-  // Check if any values fall outside the declared range
+  // Check if any values fall outside the declared range — always check, even if unique count >= expected
   let outOfRange = 0
   for (const n of uniqueNums) {
     if (n < scaleMin || n > scaleMax) outOfRange++
   }
+
+  // Out-of-range values are critical regardless of unique count
+  if (outOfRange > 0) {
+    return {
+      id: `coll_${columnId}_${Date.now()}`,
+      type: 'collapsed_categories',
+      columnId,
+      severity: 'critical',
+      source: 'statistical',
+      confidence: 1.0,
+      message: `${outOfRange} value(s) fall outside the declared scale range (${scaleMin}–${scaleMax}). These will corrupt means and significance tests. Verify scale range or clean data before analysis.`,
+      suggestion: 'Fix the declared scale range, or remove/recode out-of-range values before analysis.',
+      detail: {
+        expectedPoints,
+        actualUnique: uniqueNums.size,
+        outOfRange,
+        uniqueValues: Array.from(uniqueNums).sort((a, b) => a - b),
+      },
+      timestamp: Date.now(),
+    }
+  }
+
+  // No out-of-range — check for collapsed categories (fewer unique than expected)
+  if (uniqueNums.size >= expectedPoints) return null
 
   const ratio = uniqueNums.size / expectedPoints
 
