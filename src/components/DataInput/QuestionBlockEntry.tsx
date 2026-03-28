@@ -15,12 +15,12 @@ interface QuestionBlockEntryProps {
   onBlocksConfirmed: (blocks: QuestionBlock[]) => void
 }
 
-let blockCounter = 0
-function createEmptyBlock(): QuestionBlock {
-  const id = `qb_${++blockCounter}_${Date.now()}`
+let blockIdCounter = 0
+function createEmptyBlock(displayNumber?: number): QuestionBlock {
+  const id = `qb_${++blockIdCounter}_${Date.now()}`
   return {
     id,
-    label: `Question ${blockCounter}`,
+    label: displayNumber ? `Question ${displayNumber}` : '',
     format: 'rating',
     questionType: 'rating',
     columns: [],
@@ -31,10 +31,13 @@ function createEmptyBlock(): QuestionBlock {
 }
 
 export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProps) {
-  const [blocks, setBlocks] = useState<QuestionBlock[]>([createEmptyBlock()])
+  const [blocks, setBlocks] = useState<QuestionBlock[]>([createEmptyBlock(1)])
 
   const addBlock = useCallback(() => {
-    setBlocks((prev) => [...prev, createEmptyBlock()])
+    setBlocks((prev) => {
+      const questionCount = prev.filter((b) => b.role === 'analyze').length
+      return [...prev, createEmptyBlock(questionCount + 1)]
+    })
   }, [])
 
   const addSegmentBlock = useCallback(() => {
