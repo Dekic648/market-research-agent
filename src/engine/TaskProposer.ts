@@ -86,7 +86,7 @@ export function proposeTasks(
     (b) => (b.questionType === 'rating' || b.questionType === 'behavioral') && b.columns.length === 1
   )
   const multiItemScales = questions.filter(
-    (b) => (b.questionType === 'rating' || b.questionType === 'matrix') && b.columns.length >= 2
+    (b) => (b.questionType === 'rating' || b.questionType === 'matrix' || b.questionType === 'behavioral') && b.columns.length >= 2
   )
 
   for (const outcomeBlock of singleRatings) {
@@ -315,10 +315,11 @@ const WITHIN_QUESTION_RULES: Partial<Record<QuestionType, QuestionRules>> = {
     never: ['cronbach', 'correlation', 'regression', 'driver_analysis', 'efa'],
   },
   behavioral: {
-    always: ['frequency'],
-    withSegment: ['crosstab', 'kw_significance', 'segment_profile'],
+    always: [],
+    withSegment: [],
     withMultipleItems: ['correlation'],
-    never: ['cronbach', 'efa'],
+    never: ['frequency', 'crosstab', 'kw_significance',
+            'cronbach', 'efa', 'segment_profile', 'posthoc'],
   },
   verbatim: {
     always: [],

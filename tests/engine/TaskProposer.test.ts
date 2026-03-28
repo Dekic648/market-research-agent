@@ -151,6 +151,34 @@ describe('Pass 1: Within-question tasks', () => {
     expect(tasks).toHaveLength(0)
   })
 
+  it('behavioral-only → frequency is NOT proposed', () => {
+    const blocks = [makeBlock('b1', 'Revenue Metrics', 'behavioral', 5)]
+    const tasks = proposeTasks(blocks)
+    const ids = taskPluginIds(tasks)
+
+    expect(ids).not.toContain('frequency')
+    expect(ids).not.toContain('crosstab')
+    expect(ids).not.toContain('kw_significance')
+    expect(ids).not.toContain('segment_profile')
+    expect(ids).not.toContain('cronbach')
+    // correlation is valid for 3+ behavioral items
+    expect(ids).toContain('correlation')
+  })
+
+  it('behavioral + segment → no frequency/crosstab proposed', () => {
+    const blocks = [
+      makeBlock('b1', 'Revenue Metrics', 'behavioral', 3),
+      makeSegmentBlock('seg', 50),
+    ]
+    const tasks = proposeTasks(blocks)
+    const b1Tasks = tasks.filter((t) => t.sourceQuestionIds.includes('b1') && t.sourceQuestionIds.length === 1)
+    const b1Ids = b1Tasks.map((t) => t.pluginId)
+
+    expect(b1Ids).not.toContain('frequency')
+    expect(b1Ids).not.toContain('crosstab')
+    expect(b1Ids).not.toContain('kw_significance')
+  })
+
   it('weight block → no tasks', () => {
     const blocks = [makeBlock('w', 'Weight', 'weight', 1, 50, 'weight')]
     const tasks = proposeTasks(blocks)
@@ -235,6 +263,22 @@ describe('Pass 2: Cross-question tasks', () => {
     expect(pbTasks).toHaveLength(1)
     expect(pbTasks[0].sourceQuestionIds).toContain('q1')
     expect(pbTasks[0].sourceQuestionIds).toContain('q2')
+  })
+
+  it('behavioral predictors + rating outcome → driver analysis IS proposed', () => {
+    const blocks = [
+      makeBlock('q1', 'Overall Satisfaction', 'rating', 1),
+      makeBlock('b1', 'Behavioral Metrics', 'behavioral', 5),
+    ]
+    const tasks = proposeTasks(blocks)
+    const driverTasks = tasks.filter((t) => t.pluginId === 'driver_analysis')
+
+    expect(driverTasks).toHaveLength(1)
+    expect(driverTasks[0].inputs.outcome).toBeDefined()
+    expect(driverTasks[0].inputs.outcome!.questionBlockId).toBe('q1')
+    expect(driverTasks[0].inputs.columns.length).toBe(5) // 5 behavioral predictors
+    expect(driverTasks[0].sourceQuestionIds).toContain('q1')
+    expect(driverTasks[0].sourceQuestionIds).toContain('b1')
   })
 })
 
