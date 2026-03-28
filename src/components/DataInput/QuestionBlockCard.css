@@ -238,3 +238,142 @@
   background: var(--bg-elevated);
   color: var(--text);
 }
+
+/* Confirmation states */
+.qb-unconfirmed {
+  border-left: 3px solid var(--amber);
+}
+
+.qb-confirmed {
+  border-left: 3px solid var(--teal);
+}
+
+/* Interpretation card */
+.qb-interpretation {
+  padding: 14px 16px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-elevated);
+}
+
+.qb-type-label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.qb-type-consequence {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.qb-scale-range-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* Nominal-integer warning */
+.qb-nominal-warning {
+  padding: 12px;
+  background: var(--amber-bg);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.qb-nominal-warning p {
+  font-size: 13px;
+  color: var(--amber-text);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.qb-nominal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Confirm / Change actions */
+.qb-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.qb-confirmed-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.qb-change-link {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Type selector */
+.qb-type-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+}
+
+.qb-type-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  text-align: left;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+
+.qb-type-option:hover { background: var(--bg-elevated); }
+
+.qb-type-option.active {
+  border-color: var(--teal);
+  background: var(--teal-bg);
+}
+
+.qb-type-option-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.qb-type-option-consequence {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Help text */
+.qb-help-toggle {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.qb-help-text {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+}

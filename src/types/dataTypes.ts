@@ -128,6 +128,7 @@ export interface QuestionBlock {
   columns: ColumnDefinition[]
   scaleRange?: [number, number]
   role: 'question' | 'segment' | 'weight'
+  confirmed: boolean                // user explicitly confirmed the type classification
   pastedAt: number
 }
 

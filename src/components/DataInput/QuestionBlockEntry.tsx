@@ -23,6 +23,7 @@ function createEmptyBlock(): QuestionBlock {
     questionType: 'rating',
     columns: [],
     role: 'question',
+    confirmed: false,
     pastedAt: Date.now(),
   }
 }
@@ -55,7 +56,10 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
     setBlocks((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
-  const hasData = blocks.some((b) => b.columns.length > 0)
+  const blocksWithData = blocks.filter((b) => b.columns.length > 0)
+  const hasData = blocksWithData.length > 0
+  const allConfirmed = blocksWithData.every((b) => b.confirmed)
+  const unconfirmedCount = blocksWithData.filter((b) => !b.confirmed).length
   const hasSegment = blocks.some((b) => b.role === 'segment')
   const questionCount = blocks.filter((b) => b.role === 'question' && b.columns.length > 0).length
 
@@ -97,10 +101,13 @@ export function QuestionBlockEntry({ onBlocksConfirmed }: QuestionBlockEntryProp
           <span className="badge badge-purple">{questionCount} question{questionCount !== 1 ? 's' : ''} with data</span>
           {hasSegment && <span className="badge badge-teal">{blocks.filter(b => b.role === 'segment').length} segment(s)</span>}
         </div>
+        {unconfirmedCount > 0 && hasData && (
+          <span className="badge badge-amber">{unconfirmedCount} unconfirmed</span>
+        )}
         <button
           className="btn btn-primary"
-          disabled={!hasData}
-          onClick={() => onBlocksConfirmed(blocks.filter((b) => b.columns.length > 0))}
+          disabled={!hasData || !allConfirmed}
+          onClick={() => onBlocksConfirmed(blocksWithData)}
         >
           Continue →
         </button>

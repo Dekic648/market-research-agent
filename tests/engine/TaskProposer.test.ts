@@ -43,7 +43,7 @@ function makeBlock(
   const columns = Array.from({ length: nCols }, (_, i) =>
     makeCol(`${id}_c${i}`, `${label} Item ${i + 1}`, nRows)
   )
-  return { id, label, questionType: type, columns, role, pastedAt: Date.now() }
+  return { id, label, questionType: type, columns, role, confirmed: true, pastedAt: Date.now() }
 }
 
 function makeSegmentBlock(id: string, n: number): QuestionBlock {
@@ -51,7 +51,7 @@ function makeSegmentBlock(id: string, n: number): QuestionBlock {
   return {
     id, label: 'Segment', questionType: 'category',
     columns: [makeCol(`${id}_seg`, 'Segment', n, vals)],
-    role: 'segment', pastedAt: Date.now(),
+    role: 'segment', confirmed: true, pastedAt: Date.now(),
   }
 }
 
