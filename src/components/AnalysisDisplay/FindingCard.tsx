@@ -11,6 +11,12 @@ interface FindingFlag {
   message: string
 }
 
+interface VerificationResult {
+  checkType: string
+  severity: 'warning' | 'info'
+  message: string
+}
+
 interface FindingCardProps {
   title: string
   summary: string
@@ -19,11 +25,12 @@ interface FindingCardProps {
   effectSize: number | null
   effectLabel: string | null
   flags?: FindingFlag[]
+  verificationResults?: VerificationResult[]
   onSuppress?: () => void
 }
 
 export function FindingCard({
-  title, summary, significant, pValue, effectLabel, flags, onSuppress,
+  title, summary, significant, pValue, effectLabel, flags, verificationResults, onSuppress,
 }: FindingCardProps) {
   return (
     <div className={`finding-card ${significant ? 'finding-sig' : 'finding-ns'}`}>
@@ -49,6 +56,16 @@ export function FindingCard({
           {String(flag.message)}
         </div>
       ))}
+
+      {/* Verification results — Simpson's Paradox, moderation */}
+      {verificationResults && verificationResults.length > 0 && verificationResults.map((vr, i) => {
+        const prefix = vr.checkType === 'simpsons_paradox' ? 'Confound check' : 'Moderation check'
+        return (
+          <div key={`vr_${i}`} className={`finding-flag finding-flag-${vr.severity}`}>
+            <strong>{prefix}:</strong> {String(vr.message)}
+          </div>
+        )
+      })}
 
       {onSuppress && (
         <button className="finding-suppress" onClick={onSuppress}>Hide from report</button>

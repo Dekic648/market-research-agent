@@ -33,6 +33,9 @@ interface FindingsStoreState {
    */
   applyFDRCorrection: (method: 'bonferroni' | 'bh') => void
 
+  /** Attach a post-analysis verification result to an existing finding */
+  attachVerificationResult: (findingId: string, result: import('../types/dataTypes').VerificationResult) => void
+
   reset: () => void
 }
 
@@ -146,6 +149,15 @@ export const useFindingsStore = create<FindingsStoreState>()((set, get) => ({
 
       return { findings: allFindings, fdrApplied: true }
     }),
+
+  attachVerificationResult: (findingId, result) =>
+    set((s) => ({
+      findings: s.findings.map((f) =>
+        f.id === findingId
+          ? { ...f, verificationResults: [...(f.verificationResults ?? []), result] }
+          : f
+      ),
+    })),
 
   reset: () => set(initialState),
 }))

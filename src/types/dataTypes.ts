@@ -232,6 +232,8 @@ export type LogEntryType =
   | 'finding_suppressed'
   | 'finding_reordered'
   | 'fdr_correction_applied'
+  // Verification events
+  | 'verification_result'
   // Session events
   | 'session_saved'
   | 'session_loaded'
@@ -270,6 +272,15 @@ export interface Finding {
   createdAt: number
   dataVersion: number
   dataFingerprint: string
+  verificationResults?: VerificationResult[]
+}
+
+export interface VerificationResult {
+  findingId: string
+  checkType: 'simpsons_paradox' | 'moderation_check'
+  severity: 'warning' | 'info'
+  detail: Record<string, unknown>
+  message: string
 }
 
 // ============================================================
