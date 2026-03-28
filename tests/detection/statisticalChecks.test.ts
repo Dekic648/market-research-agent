@@ -10,6 +10,8 @@ import {
   checkTimestampColumn,
   checkMultiAssignedCodes,
   checkCollapsedCategories,
+  checkSkewedDistribution,
+  checkZeroInflated,
   runStatisticalChecks,
 } from '../../src/detection/statisticalChecks'
 import type { CheckInput } from '../../src/detection/types'
@@ -314,6 +316,116 @@ describe('checkCollapsedCategories', () => {
       columnId: 'q1',
       columnName: 'Q1',
       values: [1, 3, 5],
+    })
+    expect(flag).toBeNull()
+  })
+})
+
+// ============================================================
+// 7. Skewed distribution detection
+// ============================================================
+
+describe('checkSkewedDistribution', () => {
+  it('flags heavily right-skewed revenue data', () => {
+    // Simulate right-skewed revenue: mostly small, few very large
+    const values = [
+      0, 0, 0, 1, 2, 1, 0, 3, 0, 1,
+      0, 2, 1, 0, 0, 5, 0, 1, 0, 50,
+      0, 0, 1, 0, 2, 0, 0, 100, 0, 1,
+      0, 0, 0, 1, 0, 0, 3, 0, 0, 200,
+    ]
+    const flag = checkSkewedDistribution({
+      columnId: 'revenue',
+      columnName: 'Revenue',
+      values,
+      sensitivity: 'anonymous',
+    })
+
+    expect(flag).not.toBeNull()
+    expect(flag!.type).toBe('skewed_distribution')
+    expect(flag!.severity).toBe('warning')
+    expect((flag!.detail as any).skewness).toBeGreaterThan(2.0)
+    expect((flag!.detail as any).actionType).toBe('add_transform')
+    expect((flag!.detail as any).params.type).toBe('logTransform')
+  })
+
+  it('does not flag symmetric data', () => {
+    const values = [1, 2, 3, 4, 5, 5, 4, 3, 2, 1, 3, 3, 3, 3, 3, 2, 4, 2, 4, 3]
+    const flag = checkSkewedDistribution({
+      columnId: 'q1',
+      columnName: 'Q1',
+      values,
+      sensitivity: 'anonymous',
+    })
+    expect(flag).toBeNull()
+  })
+
+  it('does not flag non-anonymous columns', () => {
+    const values = Array.from({ length: 40 }, (_, i) => i < 35 ? 0 : 100 * i)
+    const flag = checkSkewedDistribution({
+      columnId: 'salary',
+      columnName: 'Salary',
+      values,
+      sensitivity: 'personal',
+    })
+    expect(flag).toBeNull()
+  })
+})
+
+// ============================================================
+// 8. Zero-inflated distribution detection
+// ============================================================
+
+describe('checkZeroInflated', () => {
+  it('flags column with > 40% zeros and positive tail', () => {
+    // 60% zeros, rest positive
+    const values = [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      5, 10, 15, 20, 50, 100, 200, 500,
+    ]
+    const flag = checkZeroInflated({
+      columnId: 'iap',
+      columnName: 'IAP Revenue',
+      values,
+      sensitivity: 'anonymous',
+    })
+
+    expect(flag).not.toBeNull()
+    expect(flag!.type).toBe('zero_inflated')
+    expect(flag!.severity).toBe('warning')
+    expect((flag!.detail as any).zeroPct).toBeGreaterThan(0.4)
+    expect((flag!.detail as any).actionType).toBe('add_transform')
+  })
+
+  it('does not flag column with few zeros', () => {
+    const values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    const flag = checkZeroInflated({
+      columnId: 'score',
+      columnName: 'Score',
+      values,
+      sensitivity: 'anonymous',
+    })
+    expect(flag).toBeNull()
+  })
+
+  it('does not flag non-anonymous columns', () => {
+    const values = Array.from({ length: 20 }, (_, i) => i < 15 ? 0 : 100)
+    const flag = checkZeroInflated({
+      columnId: 'income',
+      columnName: 'Income',
+      values,
+      sensitivity: 'pseudonymous',
+    })
+    expect(flag).toBeNull()
+  })
+
+  it('does not flag all-zero columns', () => {
+    const values = Array.from({ length: 20 }, () => 0)
+    const flag = checkZeroInflated({
+      columnId: 'empty',
+      columnName: 'Empty',
+      values,
+      sensitivity: 'anonymous',
     })
     expect(flag).toBeNull()
   })

@@ -394,7 +394,126 @@ export function checkCollapsedCategories(input: CheckInput): DetectionFlag | nul
 }
 
 // ============================================================
-// Runner — execute all 6 checks on a column
+// 7. Skewed distribution detection
+// ============================================================
+
+/**
+ * Flags continuous columns with heavy right skew (skewness > 2.0).
+ * Revenue, IAP, and count data are almost always right-skewed.
+ * Log transform is recommended before regression or correlation.
+ */
+export function checkSkewedDistribution(input: CheckInput): DetectionFlag | null {
+  const { columnId, values, sensitivity } = input
+  if (sensitivity && sensitivity !== 'anonymous') return null
+  if (values.length < 10) return null
+
+  // Extract numeric values and compute skewness
+  const nums: number[] = []
+  for (const v of values) {
+    if (v === null) continue
+    const n = typeof v === 'number' ? v : parseFloat(String(v))
+    if (!isNaN(n) && isFinite(n)) nums.push(n)
+  }
+
+  if (nums.length < 10) return null
+
+  // Check numeric ratio — only flag continuous data
+  const numericRatio = input.fingerprint?.numericRatio ?? (nums.length / values.filter((v) => v !== null).length)
+  if (numericRatio < 0.8) return null
+
+  // Compute skewness
+  const n = nums.length
+  const mean = nums.reduce((s, v) => s + v, 0) / n
+  const sd = Math.sqrt(nums.reduce((s, v) => s + (v - mean) * (v - mean), 0) / (n - 1))
+  if (sd === 0 || n < 3) return null
+
+  const skewness = (n / ((n - 1) * (n - 2))) * nums.reduce((s, v) => s + Math.pow((v - mean) / sd, 3), 0)
+
+  if (skewness <= 2.0) return null
+
+  return {
+    id: `skew_${columnId}_${Date.now()}`,
+    type: 'skewed_distribution',
+    columnId,
+    severity: 'warning',
+    source: 'statistical',
+    confidence: Math.min(skewness / 5, 0.95),
+    message: `This column is heavily right-skewed (skewness = ${skewness.toFixed(2)}). Log transform recommended before regression or correlation — raw values will violate linearity assumptions.`,
+    suggestion: 'Apply logTransform (natural log, add constant 1 for zeros).',
+    detail: {
+      skewness,
+      mean,
+      sd,
+      min: Math.min(...nums),
+      max: Math.max(...nums),
+      actionType: 'add_transform',
+      params: { type: 'logTransform', base: Math.E, handleZero: 'add_constant', constant: 1 },
+    },
+    timestamp: Date.now(),
+  }
+}
+
+// ============================================================
+// 8. Zero-inflated distribution detection
+// ============================================================
+
+/**
+ * Flags continuous columns where > 40% of values are zero
+ * with a substantial positive tail. Common in IAP revenue,
+ * purchase counts, and behavioral engagement metrics.
+ */
+export function checkZeroInflated(input: CheckInput): DetectionFlag | null {
+  const { columnId, values, sensitivity } = input
+  if (sensitivity && sensitivity !== 'anonymous') return null
+  if (values.length < 10) return null
+
+  const nums: number[] = []
+  for (const v of values) {
+    if (v === null) continue
+    const n = typeof v === 'number' ? v : parseFloat(String(v))
+    if (!isNaN(n) && isFinite(n)) nums.push(n)
+  }
+
+  if (nums.length < 10) return null
+
+  const numericRatio = input.fingerprint?.numericRatio ?? (nums.length / values.filter((v) => v !== null).length)
+  if (numericRatio < 0.8) return null
+
+  const zeroCount = nums.filter((n) => n === 0).length
+  const zeroPct = zeroCount / nums.length
+  const maxVal = Math.max(...nums)
+
+  // Trigger: > 40% zeros AND max value substantially above 0
+  if (zeroPct <= 0.4) return null
+  if (maxVal <= 0) return null
+
+  // "Substantially above" — max should be at least 10x the mean of non-zero values
+  const nonZero = nums.filter((n) => n > 0)
+  if (nonZero.length === 0) return null
+
+  return {
+    id: `zeroinf_${columnId}_${Date.now()}`,
+    type: 'zero_inflated',
+    columnId,
+    severity: 'warning',
+    source: 'statistical',
+    confidence: Math.min(zeroPct * 1.3, 0.95),
+    message: `${(zeroPct * 100).toFixed(0)}% of values are zero with a long tail of positive values (max = ${maxVal.toFixed(2)}). Log(value + 1) transform recommended before regression.`,
+    suggestion: 'Apply logTransform (natural log, add constant 1 for zeros).',
+    detail: {
+      zeroPct,
+      zeroCount,
+      maxVal,
+      nonZeroMean: nonZero.reduce((s, v) => s + v, 0) / nonZero.length,
+      actionType: 'add_transform',
+      params: { type: 'logTransform', base: Math.E, handleZero: 'add_constant', constant: 1 },
+    },
+    timestamp: Date.now(),
+  }
+}
+
+// ============================================================
+// Runner — execute all 8 checks on a column
 // ============================================================
 
 /**
@@ -412,6 +531,8 @@ export function runStatisticalChecks(input: CheckInput): DetectionFlag[] {
     checkTimestampColumn,
     checkMultiAssignedCodes,
     checkCollapsedCategories,
+    checkSkewedDistribution,
+    checkZeroInflated,
   ]
 
   for (const check of checks) {

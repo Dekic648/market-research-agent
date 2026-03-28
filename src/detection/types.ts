@@ -9,6 +9,8 @@ export type DetectionFlagType =
   | 'timestamp_column'        // date/time values detected
   | 'multi_assigned_codes'    // pipe/comma-separated codes in cells
   | 'collapsed_categories'    // fewer unique values than expected for declared scale range
+  | 'skewed_distribution'     // heavy right-skew — log transform recommended
+  | 'zero_inflated'           // high % zeros with positive tail — log(x+1) recommended
 
 export type DetectionSeverity = 'info' | 'warning' | 'critical'
 
@@ -48,4 +50,8 @@ export interface CheckInput {
   }>
   /** Declared scale range, if any */
   declaredScaleRange?: [number, number] | null
+  /** Column sensitivity — checks 7+8 only fire on 'anonymous' */
+  sensitivity?: 'anonymous' | 'pseudonymous' | 'personal'
+  /** Column fingerprint — used by skew/zero-inflation checks */
+  fingerprint?: { numericRatio: number; min: number | null; max: number | null; mean: number | null; sd: number | null; nMissing: number; nRows: number } | null
 }
