@@ -87,6 +87,7 @@ export function DataWorkspace() {
       source: 'user',
       dataVersion: 1,
       createdAt: Date.now(),
+      activeSubgroup: null,
     }
 
     addNode(node)
@@ -180,17 +181,17 @@ export function DataWorkspace() {
           const block = blockMap.get(task.inputs.outcome.questionBlockId)
           const col = block?.columns.find((c) => c.id === task.inputs.outcome!.columnId)
           if (col) {
-            resolvedColumns.unshift({ id: col.id, name: col.name, values: resolveColumn(col) })
+            resolvedColumns.unshift({ id: col.id, name: col.name, values: resolveColumn(col), nullMeaning: col.nullMeaning })
           }
         }
 
         // Resolve segment
-        let resolvedSegment = undefined
+        let resolvedSegment: { id: string; name: string; values: (number | string | null)[]; nullMeaning?: import('../../types/dataTypes').NullMeaning } | undefined = undefined
         if (task.inputs.segment) {
           const block = blockMap.get(task.inputs.segment.questionBlockId)
           const col = block?.columns.find((c) => c.id === task.inputs.segment!.columnId)
           if (col) {
-            resolvedSegment = { id: col.id, name: col.name, values: resolveColumn(col) }
+            resolvedSegment = { id: col.id, name: col.name, values: resolveColumn(col), nullMeaning: col.nullMeaning }
           }
         }
 

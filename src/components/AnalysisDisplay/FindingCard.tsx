@@ -76,7 +76,7 @@ function extractKeyMetrics(props: FindingCardProps): KeyMetric[] {
 }
 
 export function FindingCard({
-  title, summary, significant, pValue, effectSize, effectLabel, flags, verificationResults, subgroupContext, onSuppress,
+  title, summary, significant, pValue, effectSize, effectLabel, flags, verificationResults, subgroupContext, weightedBy, onSuppress,
 }: FindingCardProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const keyMetrics = extractKeyMetrics({ title, summary, significant, pValue, effectSize, effectLabel })
