@@ -124,7 +124,7 @@ function buildProfileBar(result: SegmentProfileResult): ChartConfig {
 const SegmentProfilePlugin: AnalysisPlugin = {
   id: 'segment_profile',
   title: 'Segment Profiles',
-  desc: 'Per-segment profiles compared to overall average. Uses median for skewed data.',
+  desc: 'How does each segment rate across all items? Who scores highest and lowest?',
   priority: 90,
   reportPriority: 2,
   requires: ['ordinal', 'segment'],

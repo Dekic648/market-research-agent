@@ -58,7 +58,7 @@ const SKEWNESS_THRESHOLD = 2
 const CorrelationPlugin: AnalysisPlugin = {
   id: 'correlation',
   title: 'Correlation Matrix',
-  desc: 'Correlation matrix with significance markers. Auto-switches to Spearman for skewed data.',
+  desc: 'Which measures move together? When one goes up, does the other?',
   priority: 80,
   reportPriority: 4,
   requires: ['continuous'],

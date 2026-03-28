@@ -12,14 +12,14 @@ export interface MethodGroupDef {
 }
 
 const SECTION_DEFS: MethodGroupDef[] = [
-  { key: 'distributions', label: 'Distributions', order: 1 },
-  { key: 'reliability', label: 'Scale Reliability', order: 2 },
-  { key: 'group_comparisons', label: 'Group Comparisons', order: 3 },
-  { key: 'correlations', label: 'Correlations', order: 4 },
-  { key: 'temporal', label: 'Trends Over Time', order: 5 },
-  { key: 'drivers', label: 'Drivers & Prediction', order: 6 },
-  { key: 'advanced', label: 'Advanced', order: 7 },
-  { key: 'factor', label: 'Factor Structure', order: 8 },
+  { key: 'distributions', label: 'How do people respond?', order: 1 },
+  { key: 'reliability', label: 'Do these items measure the same thing?', order: 2 },
+  { key: 'group_comparisons', label: 'How do segments differ?', order: 3 },
+  { key: 'correlations', label: 'What moves together?', order: 4 },
+  { key: 'temporal', label: 'How are things changing over time?', order: 5 },
+  { key: 'drivers', label: 'What drives the outcome?', order: 6 },
+  { key: 'advanced', label: 'Advanced analyses', order: 7 },
+  { key: 'factor', label: 'Are there underlying themes?', order: 8 },
   { key: 'other', label: 'Other', order: 99 },
 ]
 

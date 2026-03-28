@@ -82,7 +82,7 @@ function buildBetaChart(r: RegressionResultData): ChartConfig {
 const RegressionPlugin: AnalysisPlugin = {
   id: 'regression',
   title: 'Linear Regression',
-  desc: 'OLS regression with standardized betas and importance ranking.',
+  desc: 'Which factors predict the outcome, and how strongly?',
   priority: 70,
   reportPriority: 6,
   requires: ['continuous', 'n>30'],

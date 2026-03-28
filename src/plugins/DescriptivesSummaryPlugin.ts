@@ -94,7 +94,7 @@ function buildTopBoxChart(rows: SummaryRow[]): ChartConfig {
 const DescriptivesSummaryPlugin: AnalysisPlugin = {
   id: 'descriptives_summary',
   title: 'Summary Statistics Table',
-  desc: 'Side-by-side comparison of all survey questions — means, medians, Top Box.',
+  desc: 'Which questions score best and worst? All items compared at a glance.',
   priority: 5,
   reportPriority: 0,
   requires: ['ordinal'],

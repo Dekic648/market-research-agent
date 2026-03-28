@@ -331,7 +331,7 @@ function buildGroupedBarBySegment(
 const FrequencyPlugin: AnalysisPlugin = {
   id: 'frequency',
   title: 'Frequency Distribution',
-  desc: 'Distribution analysis with Top2/Bot2 box scores and net score.',
+  desc: 'How do people rate each item? Shows the spread of responses and % positive.',
   priority: 10,
   reportPriority: 1,
 

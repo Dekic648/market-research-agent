@@ -104,15 +104,15 @@ function extractKeyMetrics(props: FindingCardProps): KeyMetric[] {
 // ============================================================
 
 const METRIC_FOOTNOTES: Record<string, string> = {
-  'Top Box': '% rating in the top 2 points of the scale',
-  'p-value': 'Probability the result is due to chance — lower = more confident',
-  'Effect size': 'How large the difference or relationship is in practical terms',
-  'Effect': 'How large the difference or relationship is in practical terms',
-  'r': 'Correlation — how closely two measures move together (−1 to +1)',
-  'R²': '% of variation in the outcome explained by these predictors',
-  'Training R²': '% of variation explained on the data used to build the model',
-  'CV R²': '% of variation explained on held-out data (more realistic estimate)',
-  'AUC': 'Model accuracy — 0.5 = random guessing, 1.0 = perfect prediction',
+  'Top Box': '% rating in the top 2 points of the scale. Higher = more positive.',
+  'p-value': 'Probability the result is due to chance. Lower = more confident the difference is real.',
+  'Effect size': 'How large the difference is in practice. Small differences may be statistically significant but not meaningful.',
+  'Effect': 'How large the difference is in practice. Small = hard to notice, Large = clearly visible.',
+  'r': 'How closely two measures move together. Ranges from −1 (opposite) to +1 (perfectly together). Above 0.5 = strong.',
+  'R²': '% of variation explained by these predictors. Higher = better model. Below 10% = weak.',
+  'Training R²': '% of variation explained on the data used to build the model.',
+  'CV R²': '% of variation explained on new data (more realistic). Large gap from Training R² = overfitting.',
+  'AUC': 'How well the model separates yes from no. 0.5 = random guessing, 0.7+ = useful, 0.9+ = excellent.',
 }
 
 function getMetricFootnote(metrics: KeyMetric[]): string | null {

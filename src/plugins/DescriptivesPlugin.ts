@@ -84,7 +84,7 @@ function buildBoxPlot(stat: DescriptiveStats, values: number[]): ChartConfig {
 const DescriptivesPlugin: AnalysisPlugin = {
   id: 'descriptives',
   title: 'Descriptive Statistics',
-  desc: 'Distribution summary with histogram and box plot for continuous variables.',
+  desc: 'What does this metric look like? Distribution shape, spread, and outliers.',
   priority: 10,
   reportPriority: 1,
   requires: ['continuous'],

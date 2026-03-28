@@ -161,7 +161,7 @@ const minGroupSize: Validator = {
 const SignificancePlugin: AnalysisPlugin = {
   id: 'kw_significance',
   title: 'Significance Testing (KW)',
-  desc: 'Tests whether each variable differs significantly across segments using Kruskal-Wallis.',
+  desc: 'Are the differences between segments real, or could they be random?',
   priority: 30,
   reportPriority: 3,
 

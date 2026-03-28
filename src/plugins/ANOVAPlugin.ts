@@ -71,7 +71,7 @@ function buildGroupMeansChart(result: ANOVAResult, columnName: string): ChartCon
 const ANOVAPlugin: AnalysisPlugin = {
   id: 'anova_oneway',
   title: 'One-way ANOVA',
-  desc: 'Parametric group comparison for continuous outcomes with normality checks.',
+  desc: 'Do groups differ on this metric? Tests with normality and variance checks.',
   priority: 55,
   reportPriority: 3,
   requires: ['continuous', 'segment'],

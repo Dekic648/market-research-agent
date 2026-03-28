@@ -95,7 +95,7 @@ const minN: Validator = {
 const FactorPlugin: AnalysisPlugin = {
   id: 'efa',
   title: 'Exploratory Factor Analysis',
-  desc: 'EFA with Varimax rotation, scree plot, and factor loadings.',
+  desc: 'Are there underlying themes? Do items group into natural clusters?',
   priority: 60,
   reportPriority: 5,
   requires: ['ordinal', 'n>30'],

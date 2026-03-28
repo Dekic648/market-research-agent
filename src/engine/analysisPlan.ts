@@ -148,7 +148,7 @@ function buildTier1(blocks: QuestionBlock[], analyzable: ColumnWithBlock[]): Ana
 
   return {
     id: 1,
-    label: 'Distributions',
+    label: 'How do people respond?',
     description: `${tasks.length} distribution analyses`,
     plugins: [...new Set(tasks.map((t) => t.pluginId))],
     eligible: true,
@@ -163,7 +163,7 @@ function buildTier2(
   if (segments.length === 0) {
     return {
       id: 2,
-      label: 'Group Comparisons',
+      label: 'How do segments differ?',
       description: 'Compare across groups',
       plugins: [],
       eligible: false,
@@ -319,7 +319,7 @@ function buildTier2(
   const hasCrossType = tasks.some((t) => t.crossType)
   return {
     id: 2,
-    label: 'Group Comparisons',
+    label: 'How do segments differ?',
     description: `${tasks.length} comparison${tasks.length !== 1 ? 's' : ''} across groups`,
     plugins: [...new Set(tasks.map((t) => t.pluginId))],
     eligible: true,
@@ -332,7 +332,7 @@ function buildTier3(analyzable: ColumnWithBlock[], blocks: QuestionBlock[]): Ana
   if (analyzable.length < 2) {
     return {
       id: 3,
-      label: 'Relationships',
+      label: 'What moves together?',
       description: 'Correlation and reliability',
       plugins: [],
       eligible: false,
@@ -436,7 +436,7 @@ function buildTier3(analyzable: ColumnWithBlock[], blocks: QuestionBlock[]): Ana
 
   return {
     id: 3,
-    label: 'Relationships',
+    label: 'What moves together?',
     description: `Correlation${tasks.some((t) => t.pluginId === 'cronbach') ? ' + reliability' : ''}`,
     plugins: [...new Set(tasks.map((t) => t.pluginId))],
     eligible: true,
@@ -490,7 +490,7 @@ function buildTier4(analyzable: ColumnWithBlock[]): AnalysisTier {
   if (!detectedOutcome) {
     return {
       id: 4,
-      label: 'Prediction',
+      label: 'What drives the outcome?',
       description: 'Driver analysis and regression',
       plugins: [],
       eligible: false,
@@ -503,7 +503,7 @@ function buildTier4(analyzable: ColumnWithBlock[]): AnalysisTier {
   const predictors = analyzable.filter(({ col }) => col.id !== outcome.col.id)
   if (predictors.length === 0) {
     return {
-      id: 4, label: 'Prediction', description: 'Driver analysis', plugins: [],
+      id: 4, label: 'What drives the outcome?', description: 'Driver analysis', plugins: [],
       eligible: false, reason: 'Only one column — need predictors for regression.',
       tasks: [],
     }
@@ -591,7 +591,7 @@ function buildTier4(analyzable: ColumnWithBlock[]): AnalysisTier {
 
   return {
     id: 4,
-    label: 'Prediction',
+    label: 'What drives the outcome?',
     description: tasks.map((t) => t.label).join(', '),
     plugins: [...new Set(tasks.map((t) => t.pluginId))],
     eligible: true,
@@ -656,7 +656,7 @@ function buildTier5(analyzable: ColumnWithBlock[]): AnalysisTier {
 
   return {
     id: 5,
-    label: 'Advanced',
+    label: 'Advanced analyses',
     description: `${tasks.length} analyses — expand to review`,
     plugins: [...new Set(tasks.map((t) => t.pluginId))],
     eligible: true,

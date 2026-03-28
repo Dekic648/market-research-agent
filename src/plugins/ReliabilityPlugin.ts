@@ -64,7 +64,7 @@ function buildItemDiagnosticChart(r: ReliabilityResult): ChartConfig {
 const ReliabilityPlugin: AnalysisPlugin = {
   id: 'cronbach',
   title: "Cronbach's Alpha",
-  desc: 'Scale reliability with item-total correlations and alpha-if-deleted diagnostics.',
+  desc: 'Do these items belong together as a scale? Can they be combined into one score?',
   priority: 50,
   reportPriority: 5,
   requires: ['ordinal', 'n>30'],

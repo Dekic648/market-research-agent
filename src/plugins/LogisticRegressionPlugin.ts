@@ -84,7 +84,7 @@ function buildOddsRatioChart(result: LogisticResult, outcomeName: string): Chart
 const LogisticRegressionPlugin: AnalysisPlugin = {
   id: 'logistic_regression',
   title: 'Logistic Regression',
-  desc: 'Predicts binary outcomes — which factors increase or decrease the odds.',
+  desc: 'What predicts yes vs no? Which factors increase or decrease the likelihood?',
   priority: 72,
   reportPriority: 6,
   requires: ['continuous', 'n>30'],

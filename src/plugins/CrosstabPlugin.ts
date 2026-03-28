@@ -202,7 +202,7 @@ function buildCrosstabTable(ct: CrosstabResult): ResultTable {
 const CrosstabPlugin: AnalysisPlugin = {
   id: 'crosstab',
   title: 'Cross-tabulation',
-  desc: 'Percentage breakdown by segment with index values.',
+  desc: 'How does each segment respond? % distribution table and grouped bar chart.',
   priority: 20,
   reportPriority: 2,
 

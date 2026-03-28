@@ -56,7 +56,7 @@ function buildDriverChart(r: DriverResult): ChartConfig {
 const DriverPlugin: AnalysisPlugin = {
   id: 'driver_analysis',
   title: 'Key Driver Analysis',
-  desc: 'Identifies which factors most strongly drive the outcome variable.',
+  desc: 'What matters most? Ranks factors by how much they drive the outcome.',
   priority: 75,
   reportPriority: 6,
   requires: ['continuous', 'n>30'],

@@ -140,7 +140,7 @@ function buildMeansChart(ph: PostHocResult): ChartConfig {
 const PostHocPlugin: AnalysisPlugin = {
   id: 'posthoc',
   title: 'Post-hoc Pairwise Comparisons',
-  desc: 'Mann-Whitney pairwise tests with Bonferroni correction for significant KW results.',
+  desc: 'Which specific segments differ from each other?',
   priority: 40,
   reportPriority: 3,
 
