@@ -49,6 +49,7 @@ export function DataWorkspace() {
   const [questionBlocks, setQuestionBlocks] = useState<QuestionBlock[]>([])
   const [proposedTasks, setProposedTasks] = useState<AnalysisTask[]>([])
   const [runResult, setRunResult] = useState<RunResult | null>(null)
+  const [taskStepResults, setTaskStepResults] = useState<Record<string, import('../../plugins/types').PluginStepResult>>({})
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [resultsTab, setResultsTab] = useState<'results' | 'explore'>('results')
 
@@ -131,6 +132,7 @@ export function DataWorkspace() {
       const allFindings: RunResult['findings'] = []
       const completedPlugins: string[] = []
       const skippedPlugins: string[] = []
+      const taskStepMap: Record<string, import('../../plugins/types').PluginStepResult> = {}
       const startTime = performance.now()
 
       // Build a lookup from questionBlockId → block
@@ -221,6 +223,13 @@ export function DataWorkspace() {
           const result = await runner.runOne(plugin)
           allStepResults.push(result)
           completedPlugins.push(task.pluginId)
+          taskStepMap[task.id] = result
+
+          // Derive question label from task label or source blocks
+          const questionLabel = task.label || task.sourceQuestionIds
+            .map((qid) => blockMap.get(qid)?.label)
+            .filter(Boolean)
+            .join(' + ') || ''
 
           for (const fi of result.findings) {
             const finding = {
@@ -234,6 +243,9 @@ export function DataWorkspace() {
               dataVersion: 1,
               dataFingerprint: fp,
               weightedBy: weightResult.weightColumnName,
+              sourceTaskId: task.id,
+              sourceColumns: resolvedColumns.map((c) => c.name),
+              sourceQuestionLabel: questionLabel,
             }
             allFindings.push(finding)
             addFinding(finding)
@@ -260,6 +272,7 @@ export function DataWorkspace() {
       }
 
       setRunResult(runResult)
+      setTaskStepResults(taskStepMap)
       setStep('results')
     } catch (err) {
       console.error('Analysis failed:', err)
@@ -273,6 +286,7 @@ export function DataWorkspace() {
     setQuestionBlocks([])
     setProposedTasks([])
     setRunResult(null)
+    setTaskStepResults({})
     setAnalysisError(null)
     setStep('blocks')
   }, [])
@@ -334,7 +348,7 @@ export function DataWorkspace() {
             </button>
           </div>
 
-          {resultsTab === 'results' && <AnalysisResults runResult={runResult} />}
+          {resultsTab === 'results' && <AnalysisResults runResult={runResult} taskStepResults={taskStepResults} />}
           {resultsTab === 'explore' && <ExplorerPanel blocks={questionBlocks} />}
 
           <div className="results-footer">

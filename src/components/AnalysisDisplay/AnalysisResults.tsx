@@ -1,50 +1,65 @@
 /**
- * AnalysisResults — renders all step results from a runner execution.
+ * AnalysisResults — renders findings grouped by analysis method.
+ *
+ * Layout:
+ *   ResultsPageHeader (stats + collapse/expand toggle)
+ *   FlagsStrip (verification warnings, dismissible)
+ *   MethodSection x N (each containing QuestionBlocks)
  */
 
-import { StepCard } from './StepCard'
+import { useMemo, useState } from 'react'
+import { ResultsPageHeader } from './ResultsPageHeader'
+import { FlagsStrip } from './FlagsStrip'
+import { MethodSection } from './MethodSection'
+import { groupFindings } from '../../results/groupFindings'
 import type { RunResult } from '../../runners/IStepRunner'
-import { AnalysisRegistry } from '../../plugins/AnalysisRegistry'
+import type { PluginStepResult } from '../../plugins/types'
 import './AnalysisDisplay.css'
 
 interface AnalysisResultsProps {
   runResult: RunResult
+  taskStepResults?: Record<string, PluginStepResult>
 }
 
-export function AnalysisResults({ runResult }: AnalysisResultsProps) {
-  const { stepResults, durationMs, completedPlugins, skippedPlugins } = runResult
+export function AnalysisResults({ runResult, taskStepResults }: AnalysisResultsProps) {
+  const { findings, completedPlugins, durationMs } = runResult
+  const [forceState, setForceState] = useState<{ collapsed: boolean; key: number } | undefined>(undefined)
+  const [allCollapsed, setAllCollapsed] = useState(false)
+
+  const methodSections = useMemo(
+    () => groupFindings(findings, taskStepResults),
+    [findings, taskStepResults]
+  )
+
+  const totalFindings = findings.filter((f) => !f.suppressed).length
+
+  const handleToggleAll = () => {
+    const next = !allCollapsed
+    setAllCollapsed(next)
+    setForceState({ collapsed: next, key: Date.now() })
+  }
 
   return (
     <div className="analysis-results">
-      <div className="results-header card">
-        <div className="results-summary">
-          <h2>Analysis Complete</h2>
-          <div className="results-stats">
-            <span className="badge badge-teal">{completedPlugins.length} completed</span>
-            {skippedPlugins.length > 0 && (
-              <span className="badge badge-red">{skippedPlugins.length} skipped</span>
-            )}
-            <span className="badge badge-purple">{Math.round(durationMs)}ms</span>
-            <span className="badge badge-amber">
-              {stepResults.reduce((s, r) => s + r.findings.length, 0)} findings
-            </span>
-          </div>
-        </div>
-      </div>
+      <ResultsPageHeader
+        totalFindings={totalFindings}
+        completedPlugins={completedPlugins.length}
+        durationMs={durationMs}
+        allCollapsed={allCollapsed}
+        onToggleAll={handleToggleAll}
+      />
 
-      <div className="results-steps">
-        {stepResults.map((result, i) => {
-          const plugin = AnalysisRegistry.get(result.pluginId)
-          return (
-            <StepCard
-              key={result.pluginId + '_' + i}
-              result={result}
-              pluginTitle={plugin?.title ?? result.pluginId}
-              pluginDesc={plugin?.desc ?? ''}
-              stepNumber={i + 1}
-            />
-          )
-        })}
+      <FlagsStrip findings={findings} />
+
+      <div className="method-sections">
+        {methodSections.map((section) => (
+          <MethodSection
+            key={section.key}
+            section={section}
+            defaultOpen={true}
+            forceState={forceState}
+          />
+        ))}
       </div>
     </div>
   )

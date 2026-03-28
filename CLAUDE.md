@@ -1,8 +1,8 @@
-# CLAUDE.md — v6
+# CLAUDE.md — v7
 ## Market Research Agent — Current State
 
 > **Last updated:** 2026-03-28
-> **Test count:** 675 passing across 51 test files
+> **Test count:** 685 passing across 52 test files
 > **Plugins:** 18 built and registered
 > **Deploy:** Vercel at market-research-agent-iota.vercel.app
 
@@ -70,7 +70,8 @@
 |---|---|
 | Data Input | DataWorkspace, QuestionBlockEntry, QuestionBlockCard, BulkTaggerTable, PasteGrid, TaskReview, ColumnTagger |
 | Data Preparation | PrepWorkspace, MissingDataPanel, RecodePanel, WeightCalculator, DataSummaryCard |
-| Analysis Display | AnalysisResults, StepCard, FindingCard, PlainLanguageCard, MetricsRow, DataTable |
+| Analysis Display | AnalysisResults (method-grouped), ResultsPageHeader, FlagsStrip, MethodSection, ResultQuestionBlock, StepCard (interactive mode), FindingCard, PlainLanguageCard, MetricsRow, DataTable |
+| Results Grouping | `src/results/methodGroups.ts` (METHOD_GROUPS constant), `src/results/groupFindings.ts` (pure grouping function) |
 | Charts | ChartContainer (direct Plotly.newPlot) |
 | Report | ReportBuilder (Auto Report + Custom tabs), TLDRReport, FindingsList, ChartSelector, SectionEditor, ExportPanel |
 | Explorer | ExplorerPanel (3-zone sandbox), RowFilterBar |
@@ -238,6 +239,19 @@ Unchanged. Each adapter requires sample data files before building.
 - Confidence scoring (auto-confirm high-confidence types)
 - Ambiguous name detection (col1, field, x, etc.)
 - Inline expansion for review items
+
+### Results page — method-grouped layout
+- Results now grouped by analysis method (Distributions → Reliability → Group Comparisons → Correlations → Trends → Drivers → Advanced → Factor → Other)
+- `METHOD_GROUPS` in `src/results/methodGroups.ts` maps each pluginId to a section key
+- `groupFindings()` in `src/results/groupFindings.ts` — pure function, no store imports, groups findings into `MethodSectionData[]`
+- Each section contains `QuestionGroupData[]` — question blocks with findings, charts, and plain language
+- PostHoc findings automatically attach to their parent KW significance group (matched by overlapping source columns)
+- Non-significant question blocks render collapsed with muted styling
+- Sections with 4+ question blocks make each block collapsible
+- `FlagsStrip` — dismissible banner showing Simpson's Paradox / moderation warnings from PostAnalysisVerifier
+- `ResultsPageHeader` — collapse/expand all toggle + total counts
+- Finding enrichment: `sourceTaskId`, `sourceColumns`, `sourceQuestionLabel` on Finding type (populated in DataWorkspace)
+- `StepCard` component preserved — still used for InteractiveRunner step-by-step mode
 
 ### UI improvements
 - FindingCard restructured: headline → key metrics → collapsed stats → flags

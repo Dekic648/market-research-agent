@@ -300,6 +300,12 @@ export interface Finding {
   verificationResults?: VerificationResult[]
   subgroupContext?: SubgroupContext | null
   weightedBy?: string
+  /** Task ID that produced this finding — used for grouping in results */
+  sourceTaskId?: string
+  /** Column names involved — for display in grouped results */
+  sourceColumns?: string[]
+  /** Question block label — for display headers */
+  sourceQuestionLabel?: string
 }
 
 export interface VerificationResult {
