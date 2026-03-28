@@ -59,6 +59,13 @@ export interface PluginStepResult {
   logEntry: Partial<AnalysisLogEntry>
 }
 
+export interface FindingFlag {
+  type: string
+  severity: 'info' | 'warning' | 'critical'
+  detail: Record<string, unknown>
+  message: string
+}
+
 export interface FindingInput {
   type: string
   title: string
@@ -69,6 +76,7 @@ export interface FindingInput {
   effectSize: number | null
   effectLabel: string | null
   theme: string | null
+  flags?: FindingFlag[]
 }
 
 export interface AssumptionCheck {

@@ -122,6 +122,27 @@ const RegressionPlugin: AnalysisPlugin = {
     const sigPredictors = coefficients.filter((c) => c.name !== 'intercept' && c.p < 0.05)
     const charts = [buildBetaChart(result)]
 
+    // Cook's Distance — influence diagnostics
+    // @ts-ignore
+    const cooks = StatsEngine.cooksDistance(y, xs, regRaw) as {
+      values: number[]; threshold: number; influentialCount: number; influentialIndices: number[]; error?: string
+    }
+
+    const findingFlags: Array<{ type: string; severity: 'info' | 'warning'; detail: Record<string, unknown>; message: string }> = []
+    if (cooks.influentialCount > 0) {
+      const severity = cooks.influentialCount / y.length > 0.05 ? 'warning' as const : 'info' as const
+      findingFlags.push({
+        type: 'influential_outliers',
+        severity,
+        detail: {
+          influentialCount: cooks.influentialCount,
+          threshold: cooks.threshold,
+          influentialIndices: cooks.influentialIndices,
+        },
+        message: `${cooks.influentialCount} observation(s) have Cook's D > ${cooks.threshold.toFixed(3)} and may be driving the regression result. Consider re-running without these observations.`,
+      })
+    }
+
     const findings = [{
       type: 'regression',
       title: `R² = ${reg.R2.toFixed(3)} — ${sigPredictors.length} significant predictor(s)`,
@@ -132,6 +153,7 @@ const RegressionPlugin: AnalysisPlugin = {
       effectSize: reg.R2,
       effectLabel: reg.R2 > 0.26 ? 'large' : reg.R2 > 0.13 ? 'medium' : reg.R2 > 0.02 ? 'small' : 'negligible',
       theme: null,
+      flags: findingFlags.length > 0 ? findingFlags : undefined,
     }]
 
     return {
@@ -142,6 +164,8 @@ const RegressionPlugin: AnalysisPlugin = {
         pluginId: 'regression',
         R2: reg.R2,
         nPredictors: predictors.length,
+        influentialOutlierCount: cooks.influentialCount,
+        cooksThreshold: cooks.threshold,
         outcomeColumnId: outcome.id,
         outcomeColumnName: outcome.name,
         predictorColumnIds: predictors.map((p) => p.id),

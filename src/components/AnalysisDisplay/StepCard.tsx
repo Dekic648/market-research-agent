@@ -64,6 +64,7 @@ export function StepCard({ result, pluginTitle, pluginDesc, stepNumber }: StepCa
                   pValue={f.pValue}
                   effectSize={f.effectSize}
                   effectLabel={f.effectLabel}
+                  flags={(f as any).flags}
                 />
               ))}
             </div>

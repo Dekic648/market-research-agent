@@ -115,6 +115,23 @@ const DriverPlugin: AnalysisPlugin = {
     const charts = [buildDriverChart(result)]
     const topDriver = result.predictors[0]
 
+    // Cook's Distance
+    // @ts-ignore
+    const cooks = StatsEngine.cooksDistance(y, xs, regRaw) as {
+      values: number[]; threshold: number; influentialCount: number; influentialIndices: number[]; error?: string
+    }
+
+    const findingFlags: Array<{ type: string; severity: 'info' | 'warning'; detail: Record<string, unknown>; message: string }> = []
+    if (cooks.influentialCount > 0) {
+      const severity = cooks.influentialCount / y.length > 0.05 ? 'warning' as const : 'info' as const
+      findingFlags.push({
+        type: 'influential_outliers',
+        severity,
+        detail: { influentialCount: cooks.influentialCount, threshold: cooks.threshold, influentialIndices: cooks.influentialIndices },
+        message: `${cooks.influentialCount} observation(s) have Cook's D > ${cooks.threshold.toFixed(3)} and may be driving the result.`,
+      })
+    }
+
     const findings = [{
       type: 'driver',
       title: `Top driver: ${topDriver?.name} (${(topDriver?.importance * 100).toFixed(1)}% relative importance)`,
@@ -125,6 +142,7 @@ const DriverPlugin: AnalysisPlugin = {
       effectSize: result.R2,
       effectLabel: null,
       theme: null,
+      flags: findingFlags.length > 0 ? findingFlags : undefined,
     }]
 
     return {
@@ -135,6 +153,8 @@ const DriverPlugin: AnalysisPlugin = {
         pluginId: 'driver_analysis',
         R2: result.R2,
         topDriver: topDriver?.name,
+        influentialOutlierCount: cooks.influentialCount,
+        cooksThreshold: cooks.threshold,
         outcomeColumnId: outcome.id,
         outcomeColumnName: outcome.name,
         predictorColumnIds: predictors.map((p) => p.id),

@@ -1081,6 +1081,88 @@ import jStat from 'jstat'
   }
 
   /* ================================================================
+   *  COOK'S DISTANCE — per-observation influence measure
+   * ================================================================ */
+
+  function cooksDistance(y, xs, regResult) {
+    // Accepts the same xs format as linearRegression (array of arrays)
+    if (xs.length > 0 && typeof xs[0] === "number") {
+      xs = [xs];
+    }
+
+    var n = y.length;
+    var p = xs.length + 1; // including intercept
+
+    if (n <= p || n < 3) {
+      return { values: [], threshold: 0, influentialCount: 0, influentialIndices: [], error: "n <= p" };
+    }
+
+    var residuals = regResult.residuals;
+    var MSE = regResult.MSE;
+
+    if (!residuals || !MSE || MSE === 0) {
+      return { values: [], threshold: 0, influentialCount: 0, influentialIndices: [], error: "missing residuals or MSE" };
+    }
+
+    // Build design matrix X with intercept
+    var X = [];
+    for (var i = 0; i < n; i++) {
+      var row = [1];
+      for (var j = 0; j < xs.length; j++) row.push(xs[j][i]);
+      X.push(row);
+    }
+
+    // Compute hat matrix diagonal: h_ii = X_i' (X'X)^-1 X_i
+    // First compute (X'X)^-1
+    var XtX = [];
+    for (var a = 0; a < p; a++) {
+      XtX.push([]);
+      for (var b = 0; b < p; b++) {
+        var s = 0;
+        for (var k = 0; k < n; k++) s += X[k][a] * X[k][b];
+        XtX[a].push(s);
+      }
+    }
+
+    var XtXinv = invertMatrix(XtX);
+    if (!XtXinv) {
+      return { values: [], threshold: 0, influentialCount: 0, influentialIndices: [], error: "singular X'X" };
+    }
+
+    // Compute leverage h_ii for each observation
+    var leverage = [];
+    for (var i = 0; i < n; i++) {
+      var h = 0;
+      for (var a = 0; a < p; a++) {
+        for (var b = 0; b < p; b++) {
+          h += X[i][a] * XtXinv[a][b] * X[i][b];
+        }
+      }
+      leverage.push(h);
+    }
+
+    // Cook's D: D_i = (e_i^2 * h_i) / (p * MSE * (1 - h_i)^2)
+    var threshold = 4 / n;
+    var values = [];
+    var influentialIndices = [];
+
+    for (var i = 0; i < n; i++) {
+      var denom = p * MSE * Math.pow(1 - leverage[i], 2);
+      var D = denom > 0 ? (residuals[i] * residuals[i] * leverage[i]) / denom : 0;
+      values.push(D);
+      if (D > threshold) influentialIndices.push(i);
+    }
+
+    return {
+      values: values,
+      threshold: threshold,
+      influentialCount: influentialIndices.length,
+      influentialIndices: influentialIndices,
+      leverage: leverage
+    };
+  }
+
+  /* ================================================================
    *  LOGISTIC REGRESSION  (IRLS — Iteratively Reweighted Least Squares)
    * ================================================================ */
 
@@ -6825,7 +6907,7 @@ export {
   conjointAnalysis, maxDiff, discreteChoice, latentClassAnalysis,
   cfa, irt, mixedEffects,
   survivalAnalysis, multipleImputation, decisionTree,
-  dummyCode, interpret, STOPWORDS, SENTIMENT_LEXICON,
+  dummyCode, cooksDistance, interpret, STOPWORDS, SENTIMENT_LEXICON,
 }
 
 export const _helpers = {
