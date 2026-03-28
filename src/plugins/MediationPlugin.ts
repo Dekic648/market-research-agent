@@ -43,18 +43,21 @@ const MediationPlugin: AnalysisPlugin = {
 
     const ciExcludesZero = result.bootstrapCI && !isNaN(result.bootstrapCI.lower) && !isNaN(result.bootstrapCI.upper)
       ? (result.bootstrapCI.lower > 0 || result.bootstrapCI.upper < 0) : false
-    const propPct = Math.abs(result.proportionMediated * 100)
+    const propMediated = result.proportionMediated ?? 0
+    const indirectEff = result.indirectEffect ?? 0
+    const sobelP = result.sobelP ?? 1
+    const propPct = Math.abs(propMediated * 100)
 
     const findings = [{
       type: 'mediation',
       title: ciExcludesZero
         ? `${mCol.name} mediates ${xCol.name} → ${yCol.name} (${propPct.toFixed(0)}%)`
         : `${mCol.name} does not mediate ${xCol.name} → ${yCol.name}`,
-      summary: `Indirect effect = ${result.indirectEffect.toFixed(3)}. Bootstrap 95% CI: [${result.bootstrapCI?.lower?.toFixed(3) ?? '?'}, ${result.bootstrapCI?.upper?.toFixed(3) ?? '?'}]. Sobel p = ${result.sobelP.toFixed(3)}.`,
+      summary: `Indirect effect = ${indirectEff.toFixed(3)}. Bootstrap 95% CI: [${result.bootstrapCI?.lower?.toFixed(3) ?? '?'}, ${result.bootstrapCI?.upper?.toFixed(3) ?? '?'}]. Sobel p = ${sobelP.toFixed(3)}.`,
       detail: JSON.stringify({ pathA: result.pathA, pathB: result.pathB, pathC: result.pathC, pathCprime: result.pathCprime }),
       significant: ciExcludesZero,
-      pValue: result.sobelP,
-      effectSize: Math.abs(result.proportionMediated),
+      pValue: sobelP as number | null,
+      effectSize: Math.abs(propMediated),
       effectLabel: null,
       theme: null,
     }]

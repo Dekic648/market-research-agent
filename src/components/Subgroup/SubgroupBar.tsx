@@ -42,7 +42,7 @@ export function SubgroupBar({ nodeId, allColumns, totalN }: SubgroupBarProps) {
   const previewN = useMemo(() => {
     if (!columnId || !value.trim()) return null
     return computeEffectiveN(
-      { id: '', label: '', columnId, operator, value: value.trim() },
+      { id: '', label: '', columnId, operator, value: value.trim(), source: 'manual' as const },
       allColumns
     )
   }, [columnId, operator, value, allColumns])
@@ -50,7 +50,7 @@ export function SubgroupBar({ nodeId, allColumns, totalN }: SubgroupBarProps) {
   const handleApply = useCallback(() => {
     if (!columnId || !value.trim() || !label.trim()) return
     const effectiveN = computeEffectiveN(
-      { id: '', label: label.trim(), columnId, operator, value: value.trim() },
+      { id: '', label: label.trim(), columnId, operator, value: value.trim(), source: 'manual' as const },
       allColumns
     )
     const filter: SubgroupFilter = {
