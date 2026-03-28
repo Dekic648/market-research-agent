@@ -46,7 +46,7 @@ const node: DatasetNode = {
     }],
     segments: makeCol('seg', 'Segment', 'category', seg),
   },
-  weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
+  rowCount: 50, weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
 }
 
 describe('Full pipeline — no objects in rendered values', () => {

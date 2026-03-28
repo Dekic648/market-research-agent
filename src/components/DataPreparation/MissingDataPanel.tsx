@@ -18,10 +18,15 @@ interface MissingDataPanelProps {
 }
 
 export function MissingDataPanel({ columns, strategy, onStrategyChange }: MissingDataPanelProps) {
-  const diagnostics = useMemo(() => computeMissingDiagnostics(columns), [columns])
+  // Exclude checkbox and multi_assigned — nulls in these columns mean "not selected", not missing data
+  const eligibleColumns = useMemo(
+    () => columns.filter((c) => c.type !== 'checkbox' && c.type !== 'multi_assigned'),
+    [columns]
+  )
+  const diagnostics = useMemo(() => computeMissingDiagnostics(eligibleColumns), [eligibleColumns])
   const mcar = useMemo(
-    () => (diagnostics.totalMissing > 0 ? littlesMCARTest(columns) : null),
-    [columns, diagnostics.totalMissing]
+    () => (diagnostics.totalMissing > 0 ? littlesMCARTest(eligibleColumns) : null),
+    [eligibleColumns, diagnostics.totalMissing]
   )
 
   const hasMissing = diagnostics.totalMissing > 0

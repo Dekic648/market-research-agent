@@ -93,6 +93,12 @@ export interface ColumnDefinition {
   categorySubtype?: CategorySubtype
   nRows: number
   nMissing: number
+  // NULL SEMANTICS — read this before touching rawValues
+  // null at row N means: respondent did not answer, was not shown this question,
+  // or (for checkbox/multi-response columns) did not select this option.
+  // null in a checkbox column is NOT missing data — it means "not chosen" and
+  // carries analytical meaning. Never impute or drop nulls from checkbox columns.
+  // Missing data strategy (MissingDataPanel) must never apply to checkbox columns.
   rawValues: (number | string | null)[]     // immutable after parse — NEVER written to after adapter
   fingerprint: ColumnFingerprint | null      // null until fingerprint phase
   semanticDetectionCache: DetectionSource[] | null
@@ -173,6 +179,7 @@ export interface DatasetNode {
   id: string
   label: string
   parsedData: PastedData
+  rowCount: number                  // canonical respondent count — read this, not rawValues.length
   weights: ColumnDefinition | null
   readonly: boolean
   source: 'user' | 'platform_benchmark' | 'imported_reference'

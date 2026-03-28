@@ -780,6 +780,128 @@ export function checkDuplicateRows(
 }
 
 // ============================================================
+// Dataset-level: Row alignment validation
+// ============================================================
+
+export interface RowAlignmentResult {
+  valid: boolean
+  expectedLength: number
+  violatingColumns: Array<{ id: string; name: string; length: number }>
+}
+
+/**
+ * Validate that all columns have the same row count.
+ * Row index N must always refer to the same respondent across all columns.
+ */
+export function validateRowAlignment(
+  columns: Array<{ id: string; name: string; rawValues: (number | string | null)[] }>
+): RowAlignmentResult {
+  if (columns.length === 0) return { valid: true, expectedLength: 0, violatingColumns: [] }
+
+  const expectedLength = columns[0].rawValues.length
+  const violating = columns
+    .filter((c) => c.rawValues.length !== expectedLength)
+    .map((c) => ({ id: c.id, name: c.name, length: c.rawValues.length }))
+
+  return {
+    valid: violating.length === 0,
+    expectedLength,
+    violatingColumns: violating,
+  }
+}
+
+/**
+ * Raise a critical detection flag if row alignment is violated.
+ */
+export function checkRowAlignment(
+  columns: Array<{ id: string; name: string; rawValues: (number | string | null)[] }>
+): DetectionFlag | null {
+  const result = validateRowAlignment(columns)
+  if (result.valid) return null
+
+  return {
+    id: `align_${Date.now()}`,
+    type: 'row_alignment_violation',
+    columnId: '_dataset',
+    severity: 'critical',
+    source: 'statistical',
+    confidence: 1.0,
+    message: `Columns have different row counts (expected ${result.expectedLength}). Row alignment violated — data is malformed.`,
+    suggestion: 'All columns must have the same number of rows. Check the paste source for truncated or extra rows.',
+    detail: {
+      expectedLength: result.expectedLength,
+      violatingColumns: result.violatingColumns,
+    },
+    timestamp: Date.now(),
+  }
+}
+
+// ============================================================
+// Straight-line response detection (matrix blocks)
+// ============================================================
+
+/**
+ * Detect respondents who gave identical answers across all items in a matrix block.
+ * Only runs on matrix-type blocks with 4+ columns.
+ * Returns a warning flag if > 10% of respondents are straight-liners.
+ */
+export function checkStraightLiners(
+  columns: Array<{ rawValues: (number | string | null)[] }>,
+  questionType: string
+): DetectionFlag | null {
+  if (questionType !== 'matrix') return null
+  if (columns.length < 4) return null
+
+  const nRows = columns[0]?.rawValues.length ?? 0
+  if (nRows < 10) return null
+
+  let straightLinerCount = 0
+  let respondentsWithResponses = 0
+
+  for (let r = 0; r < nRows; r++) {
+    const nonNullValues: (number | string)[] = []
+    for (const col of columns) {
+      const v = col.rawValues[r]
+      if (v !== null && v !== undefined) nonNullValues.push(v)
+    }
+
+    // Need at least 4 non-null responses to count
+    if (nonNullValues.length < 4) continue
+
+    respondentsWithResponses++
+
+    // Check if all non-null values are identical
+    const first = nonNullValues[0]
+    const allSame = nonNullValues.every((v) => v === first)
+    if (allSame) straightLinerCount++
+  }
+
+  if (respondentsWithResponses === 0) return null
+
+  const pct = straightLinerCount / respondentsWithResponses
+  if (pct <= 0.10) return null
+
+  return {
+    id: `straight_${Date.now()}`,
+    type: 'straight_line_responses',
+    columnId: '_matrix_block',
+    severity: 'warning',
+    source: 'statistical',
+    confidence: Math.min(pct * 2, 0.95),
+    message: `${(pct * 100).toFixed(0)}% of respondents (${straightLinerCount} of ${respondentsWithResponses}) gave identical answers across all ${columns.length} items. This may indicate disengaged responses that inflate reliability scores.`,
+    suggestion: 'Review these respondents before running reliability (Cronbach α) or factor analysis. Consider flagging or excluding them.',
+    detail: {
+      count: straightLinerCount,
+      pct,
+      threshold: 0.10,
+      totalRespondents: respondentsWithResponses,
+      nItems: columns.length,
+    },
+    timestamp: Date.now(),
+  }
+}
+
+// ============================================================
 // Internal math helpers (no jstat dependency — keep detection standalone)
 // ============================================================
 

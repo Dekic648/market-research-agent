@@ -42,6 +42,7 @@ function makeNode(columns: ColumnDefinition[], segment?: ColumnDefinition): Data
       groups: [{ questionType: columns[0]?.type ?? 'rating', columns, label: 'Test Group' }],
       segments: segment,
     },
+    rowCount: columns[0]?.nRows ?? 0,
     weights: null,
     readonly: false,
     source: 'user',

@@ -71,6 +71,7 @@ export function DataWorkspace() {
     }))
 
     const nodeId = 'node_' + Date.now()
+    const firstCol = questions[0]?.columns[0]
     const node: DatasetNode = {
       id: nodeId,
       label: 'Dataset',
@@ -78,6 +79,7 @@ export function DataWorkspace() {
         groups,
         segments: segBlock?.columns[0],
       },
+      rowCount: firstCol?.nRows ?? 0,
       weights: null,
       readonly: false,
       source: 'user',

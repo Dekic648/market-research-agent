@@ -78,6 +78,7 @@ describe('Store serialization contract', () => {
           },
         ],
       },
+      rowCount: 5,
       weights: null,
       readonly: false,
       source: 'user',

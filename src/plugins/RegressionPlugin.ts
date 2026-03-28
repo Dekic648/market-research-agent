@@ -138,7 +138,15 @@ const RegressionPlugin: AnalysisPlugin = {
       pluginId: 'regression', data: { result }, charts, findings,
       plainLanguage: `R² = ${reg.R2.toFixed(3)}. ${sigPredictors.length} of ${predictors.length} predictors significant.`,
       assumptions: [],
-      logEntry: { type: 'analysis_run', payload: { pluginId: 'regression', R2: reg.R2, nPredictors: predictors.length } },
+      logEntry: { type: 'analysis_run', payload: {
+        pluginId: 'regression',
+        R2: reg.R2,
+        nPredictors: predictors.length,
+        outcomeColumnId: outcome.id,
+        outcomeColumnName: outcome.name,
+        predictorColumnIds: predictors.map((p) => p.id),
+        predictorColumnNames: predictors.map((p) => p.name),
+      } },
     }
   },
 

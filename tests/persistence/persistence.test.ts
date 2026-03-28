@@ -40,7 +40,7 @@ describe('serializeStores', () => {
     // Add data to each store
     useDatasetGraphStore.getState().addNode({
       id: 'n1', label: 'Test', parsedData: { groups: [] },
-      weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
+      rowCount: 0, weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
     })
     useSessionStore.getState().setActiveDatasetNode('n1')
     useChartStore.getState().addChart({
@@ -71,7 +71,7 @@ describe('rehydrateAllStores', () => {
     // Populate stores
     useDatasetGraphStore.getState().addNode({
       id: 'n1', label: 'Test', parsedData: { groups: [] },
-      weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
+      rowCount: 0, weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
     })
     useSessionStore.getState().setActiveDatasetNode('n1')
     useFindingsStore.getState().add({

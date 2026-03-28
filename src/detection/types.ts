@@ -15,6 +15,8 @@ export type DetectionFlagType =
   | 'constant_column'         // only 1 unique value — exclude from all analysis
   | 'duplicate_rows'          // dataset contains duplicate rows — inflates n
   | 'near_zero_variance'      // column has near-zero variance — unstable in regression/correlation
+  | 'row_alignment_violation'  // columns have different row counts — malformed dataset
+  | 'straight_line_responses'  // >10% of respondents gave identical answers across matrix items
 
 export type DetectionSeverity = 'info' | 'warning' | 'critical'
 

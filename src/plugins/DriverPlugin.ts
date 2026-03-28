@@ -131,7 +131,15 @@ const DriverPlugin: AnalysisPlugin = {
       pluginId: 'driver_analysis', data: { result }, charts, findings,
       plainLanguage: `Top driver of ${outcome.name}: "${topDriver?.name}" (${(topDriver?.importance * 100).toFixed(1)}%).`,
       assumptions: [],
-      logEntry: { type: 'analysis_run', payload: { pluginId: 'driver_analysis', R2: result.R2, topDriver: topDriver?.name } },
+      logEntry: { type: 'analysis_run', payload: {
+        pluginId: 'driver_analysis',
+        R2: result.R2,
+        topDriver: topDriver?.name,
+        outcomeColumnId: outcome.id,
+        outcomeColumnName: outcome.name,
+        predictorColumnIds: predictors.map((p) => p.id),
+        predictorColumnNames: predictors.map((p) => p.name),
+      } },
     }
   },
 

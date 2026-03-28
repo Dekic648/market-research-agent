@@ -84,7 +84,7 @@ describe('InteractiveRunner', () => {
         }],
         segments: makeCol('seg', 'Segment', 'category', segmentValues),
       },
-      weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
+      rowCount: 40, weights: null, readonly: false, source: 'user', dataVersion: 1, createdAt: Date.now(),
     }
 
     const caps = CapabilityMatcher.resolve(node)
