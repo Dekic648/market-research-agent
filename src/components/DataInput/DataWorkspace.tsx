@@ -15,6 +15,7 @@ import { QuestionBlockEntry } from './QuestionBlockEntry'
 import { TaskReview } from './TaskReview'
 import { AnalysisResults } from '../AnalysisDisplay/AnalysisResults'
 import { ReportBuilder } from '../Report/ReportBuilder'
+import { ExplorerPanel } from '../Explorer/ExplorerPanel'
 import type { QuestionBlock, AnalysisTask, DatasetNode, DataGroup } from '../../types/dataTypes'
 import { useDatasetGraphStore } from '../../stores/datasetGraph'
 import { useSessionStore } from '../../stores/sessionStore'
@@ -49,6 +50,7 @@ export function DataWorkspace() {
   const [proposedTasks, setProposedTasks] = useState<AnalysisTask[]>([])
   const [runResult, setRunResult] = useState<RunResult | null>(null)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
+  const [resultsTab, setResultsTab] = useState<'results' | 'explore'>('results')
 
   const addNode = useDatasetGraphStore((s) => s.addNode)
   const setActiveDatasetNode = useSessionStore((s) => s.setActiveDatasetNode)
@@ -317,7 +319,24 @@ export function DataWorkspace() {
 
       {step === 'results' && runResult && (
         <>
-          <AnalysisResults runResult={runResult} />
+          <div className="results-tab-bar">
+            <button
+              className={`results-tab ${resultsTab === 'results' ? 'results-tab-active' : ''}`}
+              onClick={() => setResultsTab('results')}
+            >
+              Results
+            </button>
+            <button
+              className={`results-tab ${resultsTab === 'explore' ? 'results-tab-active' : ''}`}
+              onClick={() => setResultsTab('explore')}
+            >
+              Explore
+            </button>
+          </div>
+
+          {resultsTab === 'results' && <AnalysisResults runResult={runResult} />}
+          {resultsTab === 'explore' && <ExplorerPanel blocks={questionBlocks} />}
+
           <div className="results-footer">
             <button className="btn btn-primary" onClick={() => setStep('report')}>
               Build Report →

@@ -110,6 +110,32 @@
 }
 
 /* Results footer */
+.results-tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.results-tab {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--radius) var(--radius) 0 0;
+  border: 1px solid var(--border-light);
+  border-bottom: none;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.results-tab:hover { color: var(--text); }
+
+.results-tab-active {
+  background: var(--bg-card);
+  color: var(--text);
+  border-color: var(--border);
+}
+
 .results-footer {
   display: flex;
   justify-content: center;
