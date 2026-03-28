@@ -120,7 +120,9 @@ export const CapabilityMatcher = {
 
     for (const col of columns) {
       // Skip constant columns — they have no variance
-      if (col.subtype === 'constant') continue
+      const catSub = col.categorySubtype ?? col.subtype
+      const behSub = col.behavioralSubtype ?? col.subtype
+      if (catSub === 'constant') continue
 
       switch (col.type) {
         case 'rating':
@@ -130,11 +132,11 @@ export const CapabilityMatcher = {
           break
         case 'category':
         case 'radio':
-          if (col.subtype === 'prefixed_ordinal') {
+          if (catSub === 'prefixed_ordinal') {
             caps.add('categorical')
             caps.add('ordinal')
             caps.add('segment')
-          } else if (col.subtype === 'geo') {
+          } else if (catSub === 'geo') {
             caps.add('categorical')
             caps.add('segment')
           } else {
@@ -147,6 +149,7 @@ export const CapabilityMatcher = {
           break
         case 'behavioral':
           caps.add('continuous')
+          if (behSub === 'ordinal_rank') caps.add('ordinal')
           break
         case 'verbatim':
           caps.add('text')

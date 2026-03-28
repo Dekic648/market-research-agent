@@ -88,7 +88,9 @@ export interface ColumnDefinition {
   id: string
   name: string
   type: QuestionType
-  subtype?: BehavioralSubtype | CategorySubtype  // refined classification
+  subtype?: BehavioralSubtype | CategorySubtype  // refined classification (legacy, kept for compat)
+  behavioralSubtype?: BehavioralSubtype
+  categorySubtype?: CategorySubtype
   nRows: number
   nMissing: number
   rawValues: (number | string | null)[]     // immutable after parse — NEVER written to after adapter

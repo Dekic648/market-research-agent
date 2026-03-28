@@ -9,6 +9,7 @@ import { useState, useCallback, useRef } from 'react'
 import type { QuestionBlock, QuestionType } from '../../types/dataTypes'
 import { PasteGridAdapter, type PastedData } from '../../parsers/adapters/PasteGridAdapter'
 import { computeFingerprint } from '../../parsers/fingerprint'
+import { detectBehavioralSubtype, detectCategorySubtype } from '../../parsers/subtypeDetector'
 import './QuestionBlockCard.css'
 
 const QUESTION_TYPES: { value: QuestionType; label: string; desc: string }[] = [
@@ -49,19 +50,31 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
     (text: string) => {
       try {
         const parsed = PasteGridAdapter.parse(text)
-        const columns = parsed.columns.map((col) => ({
-          id: `${block.id}_${col.id}`,
-          name: col.name,
-          type: block.questionType,
-          nRows: col.values.length,
-          nMissing: col.values.filter((v) => v === null).length,
-          rawValues: col.values,
-          fingerprint: computeFingerprint(col.values, `${block.id}_${col.id}`),
-          semanticDetectionCache: null,
-          transformStack: [],
-          sensitivity: 'anonymous' as const,
-          declaredScaleRange: block.scaleRange ?? null,
-        }))
+        const columns = parsed.columns.map((col) => {
+          const fp = computeFingerprint(col.values, `${block.id}_${col.id}`)
+          const colDef = {
+            id: `${block.id}_${col.id}`,
+            name: col.name,
+            type: block.questionType,
+            nRows: col.values.length,
+            nMissing: col.values.filter((v: unknown) => v === null).length,
+            rawValues: col.values,
+            fingerprint: fp,
+            semanticDetectionCache: null,
+            transformStack: [] as any[],
+            sensitivity: 'anonymous' as const,
+            declaredScaleRange: block.scaleRange ?? null,
+            // Auto-detect subtypes
+            behavioralSubtype: block.questionType === 'behavioral'
+              ? detectBehavioralSubtype(col.values, fp) : undefined,
+            categorySubtype: (block.questionType === 'category' || block.questionType === 'radio')
+              ? detectCategorySubtype(col.values, fp, col.name) : undefined,
+            subtype: undefined as any,
+          }
+          // Sync legacy subtype field
+          colDef.subtype = colDef.behavioralSubtype ?? colDef.categorySubtype
+          return colDef
+        })
 
         // Auto-detect scale range from fingerprint
         let scaleRange = block.scaleRange
@@ -199,6 +212,16 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove }: Question
             <span className="badge badge-purple">{block.columns.length} column{block.columns.length !== 1 ? 's' : ''}</span>
             {block.columns[0]?.nMissing > 0 && (
               <span className="badge badge-amber">{block.columns[0].nMissing} missing</span>
+            )}
+            {block.columns[0]?.behavioralSubtype && (
+              <span className="badge badge-purple" title="Auto-detected behavioral subtype">
+                {block.columns[0].behavioralSubtype}
+              </span>
+            )}
+            {block.columns[0]?.categorySubtype && block.columns[0].categorySubtype !== 'nominal' && (
+              <span className="badge badge-amber" title="Auto-detected category subtype">
+                {block.columns[0].categorySubtype}
+              </span>
             )}
           </div>
           <div className="qb-preview-grid">
