@@ -55,12 +55,23 @@ export interface ResolvedColumnData {
 // Step result — all plugins return this
 // ============================================================
 
+export interface ResultTable {
+  id: string
+  title: string
+  columns: Array<{ key: string; label: string; numeric?: boolean }>
+  rows: Array<Record<string, string | number | null>>
+}
+
 export interface PluginStepResult {
   pluginId: string
   data: Record<string, unknown>
   charts: ChartConfig[]
   findings: FindingInput[]
   plainLanguage: string
+  /** Structured tables to render (crosstab %, pairwise comparisons, etc.) */
+  tables?: ResultTable[]
+  /** Green interpretation card text — shown prominently above results */
+  interpretationCard?: string
   assumptions: AssumptionCheck[]
   /** Caller completes with userId, dataFingerprint, dataVersion */
   logEntry: Partial<AnalysisLogEntry>

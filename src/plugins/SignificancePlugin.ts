@@ -30,6 +30,8 @@ interface ColumnSignificance {
   effectLabel: string
   nPerGroup: number[]
   groupMeans: number[]
+  groupSDs: number[]
+  groupNs: number[]
 }
 
 function effectLabel(eps: number): string {
@@ -84,6 +86,11 @@ function computeSignificance(
     effectLabel: effectLabel(Math.max(0, eps)),
     nPerGroup: groupArrays.map((g) => g.length),
     groupMeans: groupArrays.map((g) => g.reduce((s, v) => s + v, 0) / g.length),
+    groupSDs: groupArrays.map((g) => {
+      const m = g.reduce((s, v) => s + v, 0) / g.length
+      return g.length > 1 ? Math.sqrt(g.reduce((s, v) => s + (v - m) ** 2, 0) / (g.length - 1)) : 0
+    }),
+    groupNs: groupArrays.map((g) => g.length),
   }
 }
 
@@ -217,11 +224,50 @@ const SignificancePlugin: AnalysisPlugin = {
     // Check preconditions
     const assumptions = this.preconditions.map((v) => v.validate(data))
 
+    // Add mean-by-segment bar charts with 95% CI for significant results
+    const groupLabelsAll = Array.from(segGroups.keys()).sort((a, b) => String(a).localeCompare(String(b)))
+    for (const r of results.filter((r) => r.p < 0.05)) {
+      const ci95 = r.groupMeans.map((m, i) => {
+        const n = r.groupNs[i] ?? 1
+        const sd = r.groupSDs?.[i] ?? 0
+        return n > 1 ? 1.96 * sd / Math.sqrt(n) : 0
+      })
+      charts.push({
+        id: `kw_means_${r.columnId}_${Date.now()}`,
+        type: 'horizontalBar',
+        data: [{
+          y: groupLabelsAll.map(String),
+          x: r.groupMeans,
+          type: 'bar',
+          orientation: 'h',
+          marker: { color: brandColors.slice(0, groupLabelsAll.length) },
+          error_x: { type: 'data', array: ci95, visible: true },
+          text: r.groupMeans.map((m) => m.toFixed(2)),
+          textposition: 'outside',
+        }],
+        layout: {
+          ...baseLayout,
+          title: { text: `${r.columnName} — Mean by ${data.segment!.name} (95% CI)` },
+          xaxis: { title: { text: 'Mean' } },
+          yaxis: { automargin: true },
+        },
+        config: baseConfig,
+        stepId: 'kw_significance',
+        edits: {},
+      })
+    }
+
+    // Interpretation card
+    const interpretationCard = sigCount > 0
+      ? `There IS a significant difference on ${sigCount} of ${results.length} items across ${data.segment!.name} segments. ${sigCount === results.length ? 'All items differ.' : `${results.length - sigCount} item(s) show no difference.`}`
+      : `There is NO significant difference on any of the ${results.length} items across ${data.segment!.name} segments. The differences could easily be random.`
+
     return {
       pluginId: 'kw_significance',
       data: { results, segmentName: data.segment.name },
       charts,
       findings,
+      interpretationCard,
       plainLanguage: this.plainLanguage({ pluginId: 'kw_significance', data: { results, segmentName: data.segment.name }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions,
       logEntry: { type: 'analysis_run', payload: { pluginId: 'kw_significance', nTested: results.length, nSignificant: sigCount } },

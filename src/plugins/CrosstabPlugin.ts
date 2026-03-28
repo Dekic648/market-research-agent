@@ -12,6 +12,7 @@ import type {
   PluginStepResult,
   ResolvedColumnData,
   OutputContract,
+  ResultTable,
 } from './types'
 import type { ChartConfig, NullMeaning } from '../types/dataTypes'
 
@@ -162,6 +163,42 @@ function buildGroupedBarChart(ct: CrosstabResult): ChartConfig {
   }
 }
 
+function buildCrosstabTable(ct: CrosstabResult): ResultTable {
+  // Build % distribution table: rows = segments, columns = scale points + Mean + N
+  const columns = [
+    { key: 'segment', label: ct.segmentName },
+    ...ct.rowLabels.map((rl) => ({ key: `val_${rl}`, label: String(rl), numeric: true })),
+    { key: 'mean', label: 'Mean', numeric: true },
+    { key: 'n', label: 'N', numeric: true },
+  ]
+
+  const rows = ct.colLabels.map((seg, ci) => {
+    const row: Record<string, string | number | null> = { segment: String(seg) }
+    let sum = 0
+    let count = 0
+    for (let ri = 0; ri < ct.rowLabels.length; ri++) {
+      const pct = ct.table[ri][ci].colPct
+      row[`val_${ct.rowLabels[ri]}`] = `${Math.round(pct)}%`
+      // Compute mean
+      const val = Number(ct.rowLabels[ri])
+      if (!isNaN(val)) {
+        sum += val * ct.table[ri][ci].count
+        count += ct.table[ri][ci].count
+      }
+    }
+    row.mean = count > 0 ? Math.round((sum / count) * 100) / 100 : null
+    row.n = ct.colTotals[ci]
+    return row
+  })
+
+  return {
+    id: `crosstab_table_${ct.columnId}_${Date.now()}`,
+    title: `${ct.columnName} — % Distribution by ${ct.segmentName}`,
+    columns,
+    rows,
+  }
+}
+
 const CrosstabPlugin: AnalysisPlugin = {
   id: 'crosstab',
   title: 'Cross-tabulation',
@@ -218,12 +255,29 @@ const CrosstabPlugin: AnalysisPlugin = {
       }
     })
 
+    // Build structured tables
+    const tables: ResultTable[] = crosstabs.map(buildCrosstabTable)
+
+    // Interpretation card
+    const highIndex = crosstabs.flatMap((ct) =>
+      ct.table.flatMap((row, ri) =>
+        row.filter((c) => c.index > 130).map((c, ci) => ({
+          colName: ct.columnName, row: ct.rowLabels[ri], col: ct.colLabels[ci], index: c.index,
+        }))
+      )
+    )
+    const interpretationCard = highIndex.length > 0
+      ? `Response patterns differ across ${crosstabs[0]?.segmentName ?? 'segments'}. "${highIndex[0]?.col}" segment over-indexes on "${highIndex[0]?.row}" (${highIndex[0]?.index.toFixed(0)} vs 100 average).`
+      : `Response patterns are fairly even across ${crosstabs[0]?.segmentName ?? 'segments'} — no segment stands out strongly on any item.`
+
     const columnNullMeanings = data.columns.map((c) => c.nullMeaning ?? 'missing')
     return {
       pluginId: 'crosstab',
       data: { crosstabs, columnNullMeanings },
       charts,
       findings,
+      tables,
+      interpretationCard,
       plainLanguage: this.plainLanguage({ pluginId: 'crosstab', data: { crosstabs }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'crosstab', nColumns: crosstabs.length } },

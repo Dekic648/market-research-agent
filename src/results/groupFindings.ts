@@ -6,7 +6,7 @@
  */
 
 import type { Finding, ChartConfig } from '../types/dataTypes'
-import type { PluginStepResult } from '../plugins/types'
+import type { PluginStepResult, ResultTable } from '../plugins/types'
 import { METHOD_GROUPS, SECTION_BY_KEY, PLUGIN_ORDER_WITHIN_SECTION } from './methodGroups'
 import type { MethodGroupDef } from './methodGroups'
 
@@ -27,6 +27,10 @@ export interface QuestionGroupData {
   charts: ChartConfig[]
   /** Plain language summary for this group */
   plainLanguage: string
+  /** Structured tables (crosstab %, pairwise comparisons) */
+  tables: ResultTable[]
+  /** Green interpretation card text */
+  interpretationCard: string
 }
 
 export interface MethodSectionData {
@@ -148,9 +152,11 @@ export function groupFindings(
         return orderA - orderB
       })
 
-      // Get charts and plainLanguage from step results
+      // Get charts, plainLanguage, tables, interpretationCard from step results
       let charts: ChartConfig[] = []
       let plainLanguage = ''
+      let tables: ResultTable[] = []
+      let interpretationCard = ''
       if (taskStepResults) {
         const taskIds = new Set(qFindings.map((f) => f.sourceTaskId).filter(Boolean))
         for (const taskId of taskIds) {
@@ -159,6 +165,12 @@ export function groupFindings(
             charts = charts.concat(sr.charts)
             if (sr.plainLanguage && !plainLanguage) {
               plainLanguage = sr.plainLanguage
+            }
+            if (sr.tables) {
+              tables = tables.concat(sr.tables)
+            }
+            if (sr.interpretationCard && !interpretationCard) {
+              interpretationCard = sr.interpretationCard
             }
           }
         }
@@ -175,6 +187,8 @@ export function groupFindings(
         primarySignificant,
         charts,
         plainLanguage,
+        tables,
+        interpretationCard,
       })
     }
 

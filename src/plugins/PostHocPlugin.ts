@@ -14,6 +14,7 @@ import type {
   PluginStepResult,
   ResolvedColumnData,
   OutputContract,
+  ResultTable,
 } from './types'
 import type { ChartConfig } from '../types/dataTypes'
 
@@ -197,11 +198,48 @@ const PostHocPlugin: AnalysisPlugin = {
     const totalSig = results.reduce((s, ph) => s + ph.pairwise.filter((pw) => pw.significant).length, 0)
     const totalPairs = results.reduce((s, ph) => s + ph.nComparisons, 0)
 
+    // Build pairwise comparison tables
+    const tables: ResultTable[] = results.map((ph) => ({
+      id: `posthoc_table_${ph.columnId}_${Date.now()}`,
+      title: `${ph.columnName} — Pairwise Comparisons`,
+      columns: [
+        { key: 'pair', label: 'Pair' },
+        { key: 'meanA', label: 'Mean A', numeric: true },
+        { key: 'meanB', label: 'Mean B', numeric: true },
+        { key: 'diff', label: 'Diff', numeric: true },
+        { key: 'pValue', label: 'p-value', numeric: true },
+        { key: 'correctedP', label: 'Corrected p', numeric: true },
+        { key: 'significant', label: 'Significant?' },
+      ],
+      rows: ph.pairwise.map((pw) => {
+        const idxA = ph.groupLabels.indexOf(pw.groupA)
+        const idxB = ph.groupLabels.indexOf(pw.groupB)
+        const meanA = idxA >= 0 ? ph.groupMeans[idxA] : 0
+        const meanB = idxB >= 0 ? ph.groupMeans[idxB] : 0
+        return {
+          pair: `${pw.groupA} vs ${pw.groupB}`,
+          meanA: Math.round(meanA * 100) / 100,
+          meanB: Math.round(meanB * 100) / 100,
+          diff: Math.round((meanA - meanB) * 100) / 100,
+          pValue: Math.round(pw.p * 10000) / 10000,
+          correctedP: Math.round(pw.pBonferroni * 10000) / 10000,
+          significant: pw.significant ? 'Yes' : 'No',
+        }
+      }),
+    }))
+
+    // Interpretation card
+    const interpretationCard = totalSig > 0
+      ? `At least ${totalSig} pair${totalSig > 1 ? 's' : ''} of segments differ${totalSig > 1 ? '' : 's'} significantly after correcting for multiple comparisons.`
+      : `No pairwise comparisons reached significance after correction — the overall group difference may be driven by small shifts across all segments rather than any single pair.`
+
     return {
       pluginId: 'posthoc',
       data: { results },
       charts,
       findings,
+      tables,
+      interpretationCard,
       plainLanguage: this.plainLanguage({ pluginId: 'posthoc', data: { results }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'posthoc', totalPairs, totalSignificant: totalSig } },
