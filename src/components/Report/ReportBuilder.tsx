@@ -10,6 +10,7 @@ import { FindingsList } from './FindingsList'
 import { ChartSelector } from './ChartSelector'
 import { SectionEditor } from './SectionEditor'
 import { ExportPanel } from './ExportPanel'
+import { TLDRReport } from './TLDRReport'
 import {
   createReportSchema,
   type ReportSchema,
@@ -19,9 +20,13 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useAnalysisLog } from '../../stores/analysisLog'
 import './Report.css'
 
+type ReportTab = 'auto' | 'custom'
+
 export function ReportBuilder() {
   const sessionId = useSessionStore((s) => s.sessionId)
   const logEntries = useAnalysisLog((s) => s.entries)
+
+  const [activeTab, setActiveTab] = useState<ReportTab>('auto')
 
   const [schema, setSchema] = useState<ReportSchema>(() =>
     createReportSchema({
@@ -100,34 +105,57 @@ export function ReportBuilder() {
     <div className="report-builder">
       <div className="report-builder-header card">
         <h2>Report Builder</h2>
-        <p>Select findings and charts, add commentary, then export.</p>
-        {includedFindings.size > 0 && (
-          <button className="btn btn-secondary" onClick={handleAddExecutiveSummary}>
-            Add Executive Summary
+        <div className="report-tab-bar">
+          <button
+            className={`report-tab ${activeTab === 'auto' ? 'report-tab-active' : ''}`}
+            onClick={() => setActiveTab('auto')}
+          >
+            Auto Report
           </button>
-        )}
-      </div>
-
-      <div className="report-builder-grid">
-        <div className="report-builder-sidebar">
-          <FindingsList
-            onIncludeFinding={handleIncludeFinding}
-            includedIds={includedFindings}
-          />
-          <ChartSelector
-            onIncludeChart={handleIncludeChart}
-            includedIds={includedCharts}
-          />
-        </div>
-
-        <div className="report-builder-main">
-          <SectionEditor
-            sections={schema.sections}
-            onUpdateSections={handleUpdateSections}
-          />
-          <ExportPanel schema={schema} />
+          <button
+            className={`report-tab ${activeTab === 'custom' ? 'report-tab-active' : ''}`}
+            onClick={() => setActiveTab('custom')}
+          >
+            Custom Report
+          </button>
         </div>
       </div>
+
+      {activeTab === 'auto' ? (
+        <TLDRReport />
+      ) : (
+        <>
+          <div className="report-builder-header card">
+            <p>Select findings and charts, add commentary, then export.</p>
+            {includedFindings.size > 0 && (
+              <button className="btn btn-secondary" onClick={handleAddExecutiveSummary}>
+                Add Executive Summary
+              </button>
+            )}
+          </div>
+
+          <div className="report-builder-grid">
+            <div className="report-builder-sidebar">
+              <FindingsList
+                onIncludeFinding={handleIncludeFinding}
+                includedIds={includedFindings}
+              />
+              <ChartSelector
+                onIncludeChart={handleIncludeChart}
+                includedIds={includedCharts}
+              />
+            </div>
+
+            <div className="report-builder-main">
+              <SectionEditor
+                sections={schema.sections}
+                onUpdateSections={handleUpdateSections}
+              />
+              <ExportPanel schema={schema} />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

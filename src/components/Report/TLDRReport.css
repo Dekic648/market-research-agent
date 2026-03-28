@@ -1,0 +1,127 @@
+/* ============================================================
+   TLDR Auto Report
+   ============================================================ */
+
+.tldr-report {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 860px;
+}
+
+/* Executive Summary */
+.tldr-executive {
+  padding: 20px 24px;
+  background: var(--teal-bg);
+  border-left: 4px solid var(--teal);
+}
+
+.tldr-exec-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--teal-text);
+}
+
+.tldr-exec-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tldr-exec-item {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--teal-text);
+  padding-left: 16px;
+  position: relative;
+}
+
+.tldr-exec-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+
+/* Tier sections */
+.tldr-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tldr-tier-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tldr-tier-header {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.tldr-tier-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Warnings section */
+.tldr-warnings {
+  padding: 16px 20px;
+  background: var(--amber-bg);
+  border-left: 4px solid var(--amber);
+}
+
+.tldr-warnings-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--amber-text);
+  margin-bottom: 12px;
+}
+
+.tldr-warning-item {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.tldr-warning-item:last-child {
+  border-bottom: none;
+}
+
+.tldr-warning-finding {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.tldr-warning-message {
+  font-size: 12px;
+  color: var(--amber-text);
+  line-height: 1.5;
+}
+
+/* Empty state */
+.tldr-empty {
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.tldr-empty p {
+  font-size: 13px;
+  color: var(--text-faint);
+}

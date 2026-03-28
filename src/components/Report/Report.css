@@ -27,6 +27,46 @@
   width: 100%;
 }
 
+/* Tab bar */
+.report-tab-bar {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.report-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius) var(--radius) 0 0;
+  border: 1px solid var(--border-light);
+  border-bottom: none;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.report-tab:hover { color: var(--text); }
+
+.report-tab-active {
+  background: var(--bg-card);
+  color: var(--text);
+  border-color: var(--border);
+  position: relative;
+}
+
+.report-tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--bg-card);
+}
+
 .report-builder-grid {
   display: grid;
   grid-template-columns: 380px 1fr;
