@@ -391,6 +391,10 @@ export interface Finding {
   crossType?: boolean
   /** Punchy 1-2 sentence summary for TLDR — no jargon, no test names, no p-values */
   summaryLanguage: string
+  /** 0–1 editorial weight computed post-analysis — drives TLDR sort within tier */
+  narrativeWeight?: number
+  /** Set when suppressed by redundancy pass — explains why finding was hidden */
+  suppressionReason?: string
 }
 
 export interface VerificationResult {

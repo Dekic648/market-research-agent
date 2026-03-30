@@ -52,7 +52,7 @@ interface FindingsStoreState {
   /** Get findings for a specific step */
   filterByStep: (stepId: string) => Finding[]
 
-  /** Findings sorted by reportPriority, then by effect size within tier */
+  /** Findings sorted by reportPriority tier, then by narrativeWeight within tier */
   getOrderedForReport: () => Finding[]
 
   /**
@@ -139,8 +139,10 @@ export const useFindingsStore = create<FindingsStoreState>()((set, get) => ({
       const prioA = REPORT_PRIORITY[a.stepId] ?? 99
       const prioB = REPORT_PRIORITY[b.stepId] ?? 99
       if (prioA !== prioB) return prioA - prioB
-      // Within same priority tier, higher effect size first
-      return normalizeEffectSize(b) - normalizeEffectSize(a)
+      // Within same priority tier, higher narrativeWeight first (fall back to effect size)
+      const wA = a.narrativeWeight ?? normalizeEffectSize(a)
+      const wB = b.narrativeWeight ?? normalizeEffectSize(b)
+      return wB - wA
     })
   },
 

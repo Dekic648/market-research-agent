@@ -83,7 +83,44 @@ function getKeyMetric(f: Finding): { label: string; value: string } | null {
 }
 
 function assembleTLDR(findings: Finding[]): TLDRSection[] {
-  const eligible = findings.filter(shouldIncludeInTLDR)
+  let eligible = findings.filter(shouldIncludeInTLDR)
+
+  // Redundancy suppression pass: within each primary sourceColumn group,
+  // if 3+ findings share the same column and effect direction, keep only
+  // the one with the highest narrativeWeight.
+  const byColumn = new Map<string, Finding[]>()
+  for (const f of eligible) {
+    const primary = f.sourceColumns?.[0]
+    if (!primary) continue
+    if (!byColumn.has(primary)) byColumn.set(primary, [])
+    byColumn.get(primary)!.push(f)
+  }
+
+  const suppressedIds = new Set<string>()
+  for (const [, group] of byColumn) {
+    if (group.length < 3) continue
+
+    // Split by direction (positive / negative / null effect)
+    const positive = group.filter((f) => (f.effectSize ?? 0) > 0)
+    const negative = group.filter((f) => (f.effectSize ?? 0) < 0)
+
+    for (const dirGroup of [positive, negative]) {
+      if (dirGroup.length < 3) continue
+      // Sort by narrativeWeight DESC
+      dirGroup.sort((a, b) => (b.narrativeWeight ?? 0) - (a.narrativeWeight ?? 0))
+      const keeper = dirGroup[0]
+      for (let i = 1; i < dirGroup.length; i++) {
+        dirGroup[i].suppressionReason = `Redundant — subsumed by ${keeper.id}`
+        dirGroup[i].suppressed = true
+        suppressedIds.add(dirGroup[i].id)
+      }
+    }
+  }
+
+  // Re-filter after suppression
+  if (suppressedIds.size > 0) {
+    eligible = eligible.filter((f) => !suppressedIds.has(f.id))
+  }
 
   // Group by method section
   const sectionMap = new Map<string, Finding[]>()
@@ -93,9 +130,13 @@ function assembleTLDR(findings: Finding[]): TLDRSection[] {
     sectionMap.get(key)!.push(f)
   }
 
-  // Sort within each section by effect size DESC
+  // Sort within each section by narrativeWeight DESC, falling back to effectSize
   for (const [, sectionFindings] of sectionMap) {
-    sectionFindings.sort((a, b) => Math.abs(b.effectSize ?? 0) - Math.abs(a.effectSize ?? 0))
+    sectionFindings.sort((a, b) => {
+      const wA = a.narrativeWeight ?? Math.abs(a.effectSize ?? 0)
+      const wB = b.narrativeWeight ?? Math.abs(b.effectSize ?? 0)
+      return wB - wA
+    })
   }
 
   // Build sections in order

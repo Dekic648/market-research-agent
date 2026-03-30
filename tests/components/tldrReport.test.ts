@@ -48,18 +48,18 @@ describe('TLDRReport — assembly', () => {
     expect(shouldIncludeInTLDR(f)).toBe(true)
   })
 
-  it('sorts findings by effect size DESC within section', () => {
+  it('sorts findings by narrativeWeight DESC within section', () => {
     const findings = [
-      makeFinding({ stepId: 'correlation', effectSize: 0.3, summaryLanguage: 'Weak.' }),
-      makeFinding({ stepId: 'correlation', effectSize: 0.8, summaryLanguage: 'Strong.' }),
-      makeFinding({ stepId: 'correlation', effectSize: 0.5, summaryLanguage: 'Medium.' }),
+      makeFinding({ stepId: 'correlation', effectSize: 0.3, narrativeWeight: 0.40, summaryLanguage: 'Weak.' }),
+      makeFinding({ stepId: 'correlation', effectSize: 0.8, narrativeWeight: 0.70, summaryLanguage: 'Strong.' }),
+      makeFinding({ stepId: 'correlation', effectSize: 0.5, narrativeWeight: 0.55, summaryLanguage: 'Medium.' }),
     ]
     const sections = assembleTLDR(findings)
     const corrSection = sections.find((s) => s.sectionKey === 'correlations')
     expect(corrSection).toBeDefined()
-    expect(corrSection!.findings[0].effectSize).toBe(0.8)
-    expect(corrSection!.findings[1].effectSize).toBe(0.5)
-    expect(corrSection!.findings[2].effectSize).toBe(0.3)
+    expect(corrSection!.findings[0].narrativeWeight).toBe(0.70)
+    expect(corrSection!.findings[1].narrativeWeight).toBe(0.55)
+    expect(corrSection!.findings[2].narrativeWeight).toBe(0.40)
   })
 
   it('orders sections: distributions before drivers', () => {

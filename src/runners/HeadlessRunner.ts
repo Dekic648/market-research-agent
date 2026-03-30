@@ -19,6 +19,49 @@ import type {
   IStepRunner, RunResult, RunProgress, AssumptionViolation,
 } from './IStepRunner'
 
+/** Compute editorial narrative weight (0–1) for TLDR prioritization */
+function computeNarrativeWeight(finding: Finding): number {
+  // Base: significance
+  let weight = finding.significant ? 0.35 : 0
+
+  // Effect size — stepId-aware normalization
+  const e = finding.effectSize ?? 0
+  let normalizedEffect = 0
+
+  if (finding.stepId === 'logistic_regression') {
+    // AUC baseline is 0.5 (random). Map 0.5–1.0 → 0–1.
+    normalizedEffect = Math.min(1, Math.max(0, (e - 0.5) * 2))
+  } else if (e > 1) {
+    // Cohen's d: cap at 2.0
+    normalizedEffect = Math.min(1, e / 2)
+  } else {
+    normalizedEffect = e
+  }
+  weight += normalizedEffect * 0.35
+
+  // Plugin type bonus — explanatory findings rank above descriptive ones
+  const explanatoryBonus: Partial<Record<string, number>> = {
+    regression: 0.15,
+    driver_analysis: 0.15,
+    logistic_regression: 0.12,
+    correlation: 0.08,
+    kw_significance: 0.08,
+    anova_oneway: 0.08,
+  }
+  weight += explanatoryBonus[finding.stepId] ?? 0
+
+  // Behavioral bridge bonus
+  if (finding.crossType) weight += 0.08
+
+  // Simpson's Paradox / moderation bonus — highest single boost
+  const hasParadox = finding.verificationResults?.some(
+    (vr) => vr.severity === 'warning'
+  )
+  if (hasParadox) weight += 0.30
+
+  return Math.min(1, weight)
+}
+
 interface HeadlessRunnerConfig {
   data: ResolvedColumnData
   weights?: number[]
@@ -209,6 +252,11 @@ export class HeadlessRunner implements IStepRunner {
       this.fdrAutoApplied = true
     }
 
+    // Compute narrative weight for TLDR prioritization
+    for (const finding of allFindings) {
+      finding.narrativeWeight = computeNarrativeWeight(finding)
+    }
+
     // Post-analysis verification pass (Simpson's Paradox, moderation)
     if (this.config.allColumnDefinitions && this.config.segmentColumnDefinitions) {
       for (const finding of allFindings) {
@@ -235,6 +283,11 @@ export class HeadlessRunner implements IStepRunner {
           })
         }
       }
+    }
+
+    // Recompute narrative weight after verification results are attached
+    for (const finding of allFindings) {
+      finding.narrativeWeight = computeNarrativeWeight(finding)
     }
 
     return {

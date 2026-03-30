@@ -12,6 +12,7 @@ function makeFinding(overrides: Partial<Finding>): Finding {
     type: 'frequency',
     title: 'Test',
     summary: 'Test finding',
+    summaryLanguage: 'Test finding.',
     detail: '{}',
     significant: true,
     pValue: 0.01,
@@ -45,14 +46,14 @@ describe('getOrderedForReport', () => {
     expect(ordered[1].stepId).toBe('regression')
   })
 
-  it('within same priority tier, higher effect size appears first', () => {
+  it('within same priority tier, higher narrativeWeight appears first', () => {
     const store = useFindingsStore.getState()
-    store.add(makeFinding({ id: 'corr1', stepId: 'correlation', type: 'correlation', effectSize: 0.3 }))
-    store.add(makeFinding({ id: 'corr2', stepId: 'correlation', type: 'correlation', effectSize: 0.8 }))
+    store.add(makeFinding({ id: 'corr1', stepId: 'correlation', type: 'correlation', effectSize: 0.3, narrativeWeight: 0.40 }))
+    store.add(makeFinding({ id: 'corr2', stepId: 'correlation', type: 'correlation', effectSize: 0.8, narrativeWeight: 0.70 }))
 
     const ordered = useFindingsStore.getState().getOrderedForReport()
     expect(ordered.length).toBe(2)
-    expect(ordered[0].id).toBe('corr2') // higher effect size
+    expect(ordered[0].id).toBe('corr2') // higher narrativeWeight
     expect(ordered[1].id).toBe('corr1')
   })
 
