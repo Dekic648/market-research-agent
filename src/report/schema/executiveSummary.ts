@@ -90,9 +90,12 @@ export function buildExecutiveSummary(findings: Finding[]): string[] {
   const headline = headlineIdx >= 0 ? sorted[headlineIdx] : sorted[0]
 
   const result: string[] = []
+  const isBaselineHeadline = headlineIdx < 0
 
   // RULE 2 — Build headline sentence
-  const headlineSentence = buildHeadlineSentence(headline)
+  const headlineSentence = isBaselineHeadline
+    ? (headline.summaryLanguage ?? headline.title).trimEnd().replace(/\.+$/, '') + '.'
+    : buildHeadlineSentence(headline)
   result.push(headlineSentence)
 
   // RULE 3 — Supporting sentences: next 2 by weight, different from headline

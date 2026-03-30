@@ -152,6 +152,18 @@ describe('buildExecutiveSummary', () => {
     expect(summary[0]).toContain('Customer Service')
     expect(summary[0]).toContain('predictor')
   })
+
+  it('produces a readable headline when all findings are baseline stepIds', () => {
+    const summary = buildExecutiveSummary([
+      makeFinding({ stepId: 'frequency', summaryLanguage: 'Satisfaction scores 72% positive — strong.' }),
+      makeFinding({ stepId: 'descriptives', summaryLanguage: 'Average rating is 4.1 out of 5.' }),
+      makeFinding({ stepId: 'descriptives_summary', summaryLanguage: 'Responses skew positive across all items.' }),
+    ])
+    expect(summary.length).toBeGreaterThanOrEqual(1)
+    expect(summary[0]).toContain('72%')
+    expect(summary[0]).not.toContain('most notable result')
+    expect(summary[0]).not.toMatch(/\.\.$/)  // no double punctuation
+  })
 })
 
 describe('Warnings section logic', () => {
