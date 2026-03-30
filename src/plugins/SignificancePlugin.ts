@@ -240,7 +240,7 @@ const SignificancePlugin: AnalysisPlugin = {
         id: `kw_means_${r.columnId}_${Date.now()}`,
         type: 'horizontalBar',
         data: [{
-          y: groupLabelsAll.map(String),
+          y: groupLabelsAll.map((l) => truncateLabel(String(l), 40)),
           x: r.groupMeans,
           type: 'bar',
           orientation: 'h',
@@ -248,10 +248,12 @@ const SignificancePlugin: AnalysisPlugin = {
           error_x: { type: 'data', array: ci95, visible: true },
           text: r.groupMeans.map((m) => m.toFixed(2)),
           textposition: 'outside',
+          customdata: groupLabelsAll.map(String),
+          hovertemplate: '%{customdata}: %{x:.2f}<extra></extra>',
         }],
         layout: {
           ...baseLayout,
-          title: { text: `${r.columnName} — Mean by ${data.segment!.name} (95% CI)` },
+          title: { text: `${truncateLabel(r.columnName, 45)} — Mean by ${truncateLabel(data.segment!.name, 25)} (95% CI)` },
           xaxis: { title: { text: 'Mean' } },
           yaxis: { automargin: true },
         },

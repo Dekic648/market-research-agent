@@ -13,6 +13,7 @@ import type {
   ResolvedColumnData,
   ResolvedColumn,
   OutputContract,
+  ResultTable,
 } from './types'
 import type { ChartConfig, NullMeaning } from '../types/dataTypes'
 
@@ -331,6 +332,89 @@ function buildGroupedBarBySegment(
 }
 
 // ============================================================
+// Table builder — % by segment
+// ============================================================
+
+function buildSegmentTable(
+  col: ResolvedColumn,
+  segment: ResolvedColumn,
+): ResultTable {
+  // Reuse the same grouping logic as buildGroupedBarBySegment
+  const segGroups = new Map<string | number, Map<string | number, number>>()
+  const segCounts = new Map<string | number, number>()
+  const totalCounts = new Map<string | number, number>()
+  let grandTotal = 0
+
+  for (let i = 0; i < col.values.length; i++) {
+    const seg = segment.values[i]
+    const val = col.values[i]
+    if (val === null) continue
+    // Count toward total regardless of segment
+    totalCounts.set(val, (totalCounts.get(val) ?? 0) + 1)
+    grandTotal++
+    if (seg === null) continue
+    if (!segGroups.has(seg)) { segGroups.set(seg, new Map()); segCounts.set(seg, 0) }
+    segCounts.set(seg, (segCounts.get(seg) ?? 0) + 1)
+    const valMap = segGroups.get(seg)!
+    valMap.set(val, (valMap.get(val) ?? 0) + 1)
+  }
+
+  // Sorted response options (rows)
+  const allValues = new Set<string | number>()
+  for (const [, valMap] of segGroups) {
+    for (const v of valMap.keys()) allValues.add(v)
+  }
+  for (const v of totalCounts.keys()) allValues.add(v)
+  const sortedValues = Array.from(allValues).sort((a, b) => {
+    const na = typeof a === 'number' ? a : parseFloat(String(a))
+    const nb = typeof b === 'number' ? b : parseFloat(String(b))
+    if (!isNaN(na) && !isNaN(nb)) return na - nb
+    return String(a).localeCompare(String(b))
+  })
+
+  // Segment labels (columns)
+  const segLabels = Array.from(segGroups.keys())
+
+  // Build column definitions
+  const columns: ResultTable['columns'] = [
+    { key: 'response', label: 'Response' },
+    ...segLabels.map((seg) => ({
+      key: `seg_${seg}`,
+      label: `${String(seg)} (n=${segCounts.get(seg) ?? 0})`,
+      numeric: true,
+    })),
+    { key: 'total', label: `Total (n=${grandTotal})`, numeric: true },
+  ]
+
+  // Build rows — one per response option
+  const rows: ResultTable['rows'] = sortedValues.map((val) => {
+    const row: Record<string, string | number | null> = { response: String(val) }
+
+    for (const seg of segLabels) {
+      const valMap = segGroups.get(seg)!
+      const count = valMap.get(val) ?? 0
+      const total = segCounts.get(seg) ?? 1
+      const pct = total > 0 ? (count / total) * 100 : 0
+      row[`seg_${seg}`] = `${pct.toFixed(1)}%`
+    }
+
+    // Total column
+    const totalCount = totalCounts.get(val) ?? 0
+    const totalPct = grandTotal > 0 ? (totalCount / grandTotal) * 100 : 0
+    row.total = `${totalPct.toFixed(1)}%`
+
+    return row
+  })
+
+  return {
+    id: `freq_seg_table_${col.id}_${Date.now()}`,
+    title: `${col.name} — % by segment`,
+    columns,
+    rows,
+  }
+}
+
+// ============================================================
 // Plugin definition
 // ============================================================
 
@@ -357,20 +441,19 @@ const FrequencyPlugin: AnalysisPlugin = {
     )
 
     const charts: ChartConfig[] = []
+    const tables: ResultTable[] = []
 
-    // Matrix/checkbox × segment enforcement: always grouped bar chart
+    // Segment × question: always produce a grouped bar chart + % table when segment is present
     const hasSegment = !!data.segment
-    const isMatrixOrCheckbox = data.columns.some((c) =>
-      (c as any).format === 'matrix' || (c as any).format === 'multi_response'
-    )
 
-    if (hasSegment && isMatrixOrCheckbox && data.segment) {
-      // Grouped bar chart per column showing % per segment
+    if (hasSegment && data.segment) {
+      // Grouped bar chart + % table per column
       for (const col of data.columns) {
         charts.push(buildGroupedBarBySegment(col, data.segment, col.name))
+        tables.push(buildSegmentTable(col, data.segment))
       }
     } else {
-      // Default charts
+      // Default charts (no segment)
       for (const freq of frequencies) {
         charts.push(buildHorizontalBarChart(freq))
       }
@@ -420,6 +503,7 @@ const FrequencyPlugin: AnalysisPlugin = {
       data: { frequencies, columnNullMeanings },
       charts,
       findings,
+      tables: tables.length > 0 ? tables : undefined,
       plainLanguage: this.plainLanguage({ pluginId: 'frequency', data: { frequencies, columnNullMeanings }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'frequency', nColumns: frequencies.length } },

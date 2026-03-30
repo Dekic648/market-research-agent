@@ -15,9 +15,11 @@ interface MethodSectionProps {
   /** When this changes, force all sections to the given state */
   forceState?: { collapsed: boolean; key: number }
   onOpenTLDR?: () => void
+  /** When true, non-significant blocks render with muted treatment */
+  showNonSig?: boolean
 }
 
-export function MethodSection({ section, defaultOpen, forceState, onOpenTLDR }: MethodSectionProps) {
+export function MethodSection({ section, defaultOpen, forceState, onOpenTLDR, showNonSig }: MethodSectionProps) {
   const [open, setOpen] = useState(defaultOpen)
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function MethodSection({ section, defaultOpen, forceState, onOpenTLDR }: 
               group={group}
               defaultOpen={group.primarySignificant || !collapsibleBlocks}
               collapsible={collapsibleBlocks}
+              mutedNonSig={showNonSig && !group.primarySignificant}
             />
           ))}
           {/* Section summary — top findings in plain language */}

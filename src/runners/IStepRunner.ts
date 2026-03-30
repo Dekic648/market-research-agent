@@ -29,6 +29,8 @@ export interface RunResult {
   completedPlugins: string[]
   skippedPlugins: string[]
   durationMs: number
+  /** Question block labels in original paste order */
+  questionOrder?: string[]
 }
 
 export interface IStepRunner {

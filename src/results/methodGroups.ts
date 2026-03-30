@@ -90,3 +90,6 @@ export function getSectionDef(pluginId: string): MethodGroupDef {
   const key = getSectionKey(pluginId)
   return SECTION_BY_KEY[key] ?? { key: 'other', label: 'Other', order: 99 }
 }
+
+/** Section keys that belong to the Multivariate tab */
+export const MULTIVARIATE_SECTIONS = new Set(['drivers', 'factor', 'reliability'])

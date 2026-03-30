@@ -289,6 +289,7 @@ export function DataWorkspace() {
         completedPlugins,
         skippedPlugins,
         durationMs: performance.now() - startTime,
+        questionOrder: questionBlocks.map((b) => b.label),
       }
 
       setRunResult(runResult)

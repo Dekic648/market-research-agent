@@ -6,7 +6,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -38,7 +38,7 @@ function buildItemDiagnosticChart(r: ReliabilityResult): ChartConfig {
     id: `reliability_items_${Date.now()}`,
     type: 'horizontalBar',
     data: [{
-      y: r.columnNames,
+      y: r.columnNames.map((n) => truncateLabel(n, 50)),
       x: r.itemTotalCorrelations,
       type: 'bar',
       orientation: 'h',
@@ -47,6 +47,8 @@ function buildItemDiagnosticChart(r: ReliabilityResult): ChartConfig {
       },
       text: r.itemTotalCorrelations.map((c) => c.toFixed(3)),
       textposition: 'outside',
+      customdata: r.columnNames,
+      hovertemplate: '%{customdata}<br>r = %{x:.3f}<extra></extra>',
     }],
     layout: {
       ...baseLayout,

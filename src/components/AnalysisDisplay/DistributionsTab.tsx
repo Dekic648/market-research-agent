@@ -1,0 +1,161 @@
+/**
+ * DistributionsTab — Tab I: base frequency/distribution charts per question in paste order.
+ */
+
+import { useMemo, useState } from 'react'
+import { ChartContainer } from '../Charts/ChartContainer'
+import { PlainLanguageCard } from './PlainLanguageCard'
+import { DataTable } from './DataTable'
+import { truncateLabel } from '../../engine/chartDefaults'
+import type { Finding } from '../../types/dataTypes'
+import type { PluginStepResult, ResultTable } from '../../plugins/types'
+
+interface DistributionsTabProps {
+  findings: Finding[]
+  taskStepResults: Record<string, PluginStepResult>
+  questionOrder: string[]
+}
+
+/** Extract mean and n from a frequency finding's detail or summary */
+function extractStats(finding: Finding): { mean: number | null; n: number | null } {
+  try {
+    const detail = JSON.parse(finding.detail)
+    if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
+      return {
+        mean: typeof detail.mean === 'number' ? detail.mean : null,
+        n: typeof detail.n === 'number' ? detail.n : null,
+      }
+    }
+  } catch { /* not JSON */ }
+  // Fall back to parsing the summary
+  const meanMatch = finding.summary.match(/Mean\s*=\s*([\d.]+)/)
+  const nMatch = finding.summary.match(/n\s*=\s*(\d+)/)
+  return {
+    mean: meanMatch ? parseFloat(meanMatch[1]) : null,
+    n: nMatch ? parseInt(nMatch[1], 10) : null,
+  }
+}
+
+interface QuestionBlockData {
+  label: string
+  charts: import('../../types/dataTypes').ChartConfig[]
+  tables: ResultTable[]
+  summaryText: string
+  mean: number | null
+  n: number | null
+}
+
+export function DistributionsTab({ findings, taskStepResults, questionOrder }: DistributionsTabProps) {
+  const blocks = useMemo(() => {
+    const result: QuestionBlockData[] = []
+
+    for (const label of questionOrder) {
+      // Find frequency results for this question
+      const matchingEntries = Object.entries(taskStepResults).filter(([, sr]) =>
+        sr.pluginId === 'frequency'
+      )
+
+      // Match by finding's sourceQuestionLabel
+      const freqFindings = findings.filter((f) =>
+        f.stepId === 'frequency' && f.sourceQuestionLabel === label && !f.suppressed
+      )
+      if (freqFindings.length === 0) continue
+
+      // Find the taskStepResult that produced these findings
+      let charts: import('../../types/dataTypes').ChartConfig[] = []
+      let tables: ResultTable[] = []
+      let summaryText = ''
+
+      for (const f of freqFindings) {
+        if (f.sourceTaskId && taskStepResults[f.sourceTaskId]) {
+          const sr = taskStepResults[f.sourceTaskId]
+          charts = sr.charts
+          tables = sr.tables ?? []
+          summaryText = sr.interpretationCard || f.summaryLanguage || sr.plainLanguage || ''
+          break
+        }
+      }
+
+      // If no charts found via taskId, fall back to summaryLanguage
+      if (!summaryText && freqFindings[0]) {
+        summaryText = freqFindings[0].summaryLanguage || ''
+      }
+
+      const stats = freqFindings[0] ? extractStats(freqFindings[0]) : { mean: null, n: null }
+
+      result.push({ label, charts, tables, summaryText, ...stats })
+    }
+
+    return result
+  }, [findings, taskStepResults, questionOrder])
+
+  if (blocks.length === 0) {
+    return <div className="results-empty-tab">No distribution analyses to display.</div>
+  }
+
+  return (
+    <div className="distributions-tab">
+      {blocks.map((block) => (
+        <DistributionBlock key={block.label} block={block} />
+      ))}
+    </div>
+  )
+}
+
+function DistributionBlock({ block }: { block: QuestionBlockData }) {
+  const [tablesOpen, setTablesOpen] = useState(false)
+  const displayLabel = truncateLabel(block.label, 60)
+
+  return (
+    <div className="result-question-block">
+      <div className="rqb-header">
+        <h4 className="rqb-title" title={block.label}>{displayLabel}</h4>
+      </div>
+
+      <div className="rqb-body">
+        {/* Charts */}
+        {block.charts.length > 0 && (
+          <div className="rqb-charts">
+            {block.charts.map((chart) => (
+              <ChartContainer key={chart.id} chart={chart} />
+            ))}
+          </div>
+        )}
+
+        {/* Secondary stats */}
+        {(block.mean !== null || block.n !== null) && (
+          <div className="rqb-secondary-stats">
+            {block.mean !== null && <span>Mean: {block.mean.toFixed(1)}</span>}
+            {block.n !== null && <span>n={block.n}</span>}
+          </div>
+        )}
+
+        {/* Plain language summary */}
+        {block.summaryText && (
+          <div className="rqb-plain-language-muted">
+            <PlainLanguageCard text={block.summaryText} />
+          </div>
+        )}
+
+        {/* Tables — collapsed */}
+        {block.tables.length > 0 && (
+          <div className="rqb-tables-section">
+            <button className="rqb-stats-toggle" onClick={() => setTablesOpen(!tablesOpen)}>
+              {tablesOpen ? '− Data tables' : `+ Data tables (${block.tables.length})`}
+            </button>
+            {tablesOpen && (
+              <div className="rqb-tables">
+                {block.tables.map((table) => (
+                  <div key={table.id} className="rqb-table-block">
+                    <h5 className="rqb-table-title">{table.title}</h5>
+                    <DataTable columns={table.columns} rows={table.rows} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
