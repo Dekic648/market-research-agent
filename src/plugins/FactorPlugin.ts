@@ -3,7 +3,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData,
@@ -55,17 +55,18 @@ function buildScreePlot(eigenvalues: number[]): ChartConfig {
 }
 
 function buildLoadingsHeatmap(r: FactorResult): ChartConfig {
+  const yDisplay = r.columnNames.map((n) => truncateLabel(n, 45))
   return {
     id: `factor_loadings_${Date.now()}`,
     type: 'heatmap',
     data: [{
       z: r.loadings,
       x: Array.from({ length: r.nFactors }, (_, i) => `Factor ${i + 1}`),
-      y: r.columnNames,
+      y: yDisplay,
       type: 'heatmap',
       colorscale: [[0, '#e24b4a'], [0.5, '#f8f7f4'], [1, '#1d9e75']],
       zmid: 0,
-      text: r.loadings.map((row) => row.map((v) => v.toFixed(3))),
+      text: r.loadings.map((row, ri) => row.map((v) => `${r.columnNames[ri]}<br>Loading: ${v.toFixed(3)}`)),
       hoverinfo: 'text',
     }],
     layout: {

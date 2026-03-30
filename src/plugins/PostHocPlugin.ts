@@ -7,7 +7,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin,
@@ -107,12 +107,13 @@ function buildMeansChart(ph: PostHocResult): ChartConfig {
     const se = ph.groupNs[i] > 1 ? ph.groupSDs[i] / Math.sqrt(ph.groupNs[i]) : 0
     return 1.96 * se
   })
+  const yFull = ph.groupLabels.map(String)
 
   return {
     id: `posthoc_means_${ph.columnId}_${Date.now()}`,
     type: 'horizontalBar',
     data: [{
-      y: ph.groupLabels.map(String),
+      y: yFull.map((l) => truncateLabel(l, 40)),
       x: ph.groupMeans,
       type: 'bar',
       orientation: 'h',
@@ -124,10 +125,12 @@ function buildMeansChart(ph: PostHocResult): ChartConfig {
       },
       text: ph.groupMeans.map((m, i) => `${m.toFixed(2)} ±${ci95[i].toFixed(2)}`),
       textposition: 'outside',
+      customdata: yFull,
+      hovertemplate: '%{customdata}: %{x:.2f}<extra></extra>',
     }],
     layout: {
       ...baseLayout,
-      title: { text: `${ph.columnName} — Group Means (95% CI)` },
+      title: { text: `${truncateLabel(ph.columnName, 50)} — Group Means (95% CI)` },
       xaxis: { title: { text: 'Mean' } },
       yaxis: { automargin: true },
     },

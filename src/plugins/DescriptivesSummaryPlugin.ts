@@ -7,7 +7,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -69,7 +69,7 @@ function buildTopBoxChart(rows: SummaryRow[]): ChartConfig {
     id: `summary_topbox_${Date.now()}`,
     type: 'horizontalBar',
     data: [{
-      y: sorted.map((r) => r.columnName),
+      y: sorted.map((r) => truncateLabel(r.columnName, 50)),
       x: sorted.map((r) => r.topBox),
       type: 'bar',
       orientation: 'h',
@@ -78,6 +78,8 @@ function buildTopBoxChart(rows: SummaryRow[]): ChartConfig {
       },
       text: sorted.map((r) => `${r.topBox.toFixed(0)}%`),
       textposition: 'outside',
+      customdata: sorted.map((r) => r.columnName),
+      hovertemplate: '%{customdata}: %{x:.1f}%<extra></extra>',
     }],
     layout: {
       ...baseLayout,

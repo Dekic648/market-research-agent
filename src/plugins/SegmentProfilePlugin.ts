@@ -6,7 +6,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -55,11 +55,12 @@ function buildRadarChart(result: SegmentProfileResult): ChartConfig {
   // For skewed data, use median; otherwise mean
   const useMedian = result.skewedColumns.length > 0 || result.zeroInflatedColumns.length > 0
   const valueKey = useMedian ? 'median' : 'mean'
+  const thetaLabels = result.columnNames.map((n) => truncateLabel(n, 35))
 
   const traces = result.profiles.map((profile, i) => ({
     type: 'scatterpolar',
     r: [...profile.means.map((m) => m[valueKey]), profile.means[0]?.[valueKey] ?? 0],
-    theta: [...result.columnNames, result.columnNames[0] ?? ''],
+    theta: [...thetaLabels, thetaLabels[0] ?? ''],
     name: String(profile.segment),
     fill: 'toself',
     opacity: 0.6,
@@ -70,7 +71,7 @@ function buildRadarChart(result: SegmentProfileResult): ChartConfig {
   traces.push({
     type: 'scatterpolar',
     r: [...overallValues, overallValues[0] ?? 0],
-    theta: [...result.columnNames, result.columnNames[0] ?? ''],
+    theta: [...thetaLabels, thetaLabels[0] ?? ''],
     name: 'Overall',
     fill: 'none',
     opacity: 1,
@@ -96,13 +97,16 @@ function buildRadarChart(result: SegmentProfileResult): ChartConfig {
 function buildProfileBar(result: SegmentProfileResult): ChartConfig {
   const useMedian = result.skewedColumns.length > 0 || result.zeroInflatedColumns.length > 0
   const valueKey = useMedian ? 'median' : 'mean'
+  const xDisplay = result.columnNames.map((n) => truncateLabel(n, 40))
 
   const traces = result.profiles.map((profile, i) => ({
     name: String(profile.segment),
     type: 'bar',
-    x: result.columnNames,
+    x: xDisplay,
     y: profile.means.map((m) => m[valueKey]),
     marker: { color: brandColors[i % brandColors.length] },
+    customdata: result.columnNames,
+    hovertemplate: '%{customdata}: %{y:.2f}<extra></extra>',
   }))
 
   return {
@@ -114,6 +118,7 @@ function buildProfileBar(result: SegmentProfileResult): ChartConfig {
       barmode: 'group',
       title: { text: `Segment ${useMedian ? 'Medians' : 'Means'} by Variable` },
       yaxis: { title: { text: useMedian ? 'Median' : 'Mean' } },
+      xaxis: { automargin: true },
     },
     config: baseConfig,
     stepId: 'segment_profile',

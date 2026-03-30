@@ -3,7 +3,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import { groupByPeriod, detectGranularity } from '../engine/temporalAnalysis'
 import * as StatsEngine from '../engine/stats-engine'
 import type { AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract } from './types'
@@ -23,7 +23,7 @@ function buildMeansChart(periods: string[], means: number[], columnName: string)
     }],
     layout: {
       ...baseLayout,
-      title: { text: `${columnName} by time period` },
+      title: { text: `${truncateLabel(columnName, 50)} by time period` },
       xaxis: { title: { text: 'Period' }, tickangle: -45 },
       yaxis: { title: { text: 'Mean' } },
     },

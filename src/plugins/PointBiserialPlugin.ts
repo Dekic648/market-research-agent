@@ -3,7 +3,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -22,6 +22,7 @@ interface PBResult {
 
 function buildGroupMeansChart(results: PBResult[]): ChartConfig | null {
   if (results.length === 0) return null
+  const xDisplay = results.map((r) => truncateLabel(r.columnName, 40))
   return {
     id: `pb_means_${Date.now()}`,
     type: 'groupedBar',
@@ -29,23 +30,28 @@ function buildGroupMeansChart(results: PBResult[]): ChartConfig | null {
       {
         name: 'Group 0',
         type: 'bar',
-        x: results.map((r) => r.columnName),
+        x: xDisplay,
         y: results.map((r) => r.mean0),
         marker: { color: brandColors[0] },
+        customdata: results.map((r) => r.columnName),
+        hovertemplate: '%{customdata}: %{y:.2f}<extra>Group 0</extra>',
       },
       {
         name: 'Group 1',
         type: 'bar',
-        x: results.map((r) => r.columnName),
+        x: xDisplay,
         y: results.map((r) => r.mean1),
         marker: { color: brandColors[2] },
+        customdata: results.map((r) => r.columnName),
+        hovertemplate: '%{customdata}: %{y:.2f}<extra>Group 1</extra>',
       },
     ],
     layout: {
       ...baseLayout,
       barmode: 'group',
-      title: { text: `Means by ${results[0]?.binaryName ?? 'Group'}` },
+      title: { text: `Means by ${truncateLabel(results[0]?.binaryName ?? 'Group', 40)}` },
       yaxis: { title: { text: 'Mean' } },
+      xaxis: { automargin: true },
     },
     config: baseConfig,
     stepId: 'point_biserial',

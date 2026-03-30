@@ -3,7 +3,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import { trendOverTime, detectGranularity } from '../engine/temporalAnalysis'
 import type { AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract } from './types'
 import type { ChartConfig } from '../types/dataTypes'
@@ -34,8 +34,8 @@ function buildTrendChart(r: TrendResult, columnName: string): ChartConfig {
     ],
     layout: {
       ...baseLayout,
-      title: { text: `${columnName} over time` },
-      xaxis: { title: { text: 'Period' }, tickangle: -45 },
+      title: { text: `${truncateLabel(columnName, 50)} over time` },
+      xaxis: { title: { text: 'Period' }, tickangle: -45, automargin: true },
       yaxis: { title: { text: 'Mean' } },
       showlegend: true,
     },

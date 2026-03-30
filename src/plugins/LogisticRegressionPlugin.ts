@@ -7,7 +7,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract, FindingFlag,
@@ -47,7 +47,7 @@ function buildOddsRatioChart(result: LogisticResult, outcomeName: string): Chart
     id: `logistic_or_${Date.now()}`,
     type: 'horizontalBar',
     data: [{
-      y: sorted.map((c) => c.name),
+      y: sorted.map((c) => truncateLabel(c.name, 50)),
       x: sorted.map((c) => c.OR),
       type: 'bar',
       orientation: 'h',
@@ -64,10 +64,12 @@ function buildOddsRatioChart(result: LogisticResult, outcomeName: string): Chart
       },
       text: sorted.map((c) => `OR=${c.OR.toFixed(2)} ${c.significant ? '*' : 'ns'}`),
       textposition: 'outside',
+      customdata: sorted.map((c) => c.name),
+      hovertemplate: '%{customdata}<br>OR = %{x:.2f}<extra></extra>',
     }],
     layout: {
       ...baseLayout,
-      title: { text: `Odds Ratios — Predicting ${outcomeName}` },
+      title: { text: `Odds Ratios — Predicting ${truncateLabel(outcomeName, 40)}` },
       xaxis: { title: { text: 'Odds Ratio' }, type: 'log' },
       yaxis: { automargin: true },
       shapes: [{

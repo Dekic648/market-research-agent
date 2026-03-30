@@ -8,7 +8,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract, AssumptionCheck,
@@ -40,11 +40,12 @@ function labelEta(eta: number): string {
 }
 
 function buildGroupMeansChart(result: ANOVAResult, columnName: string): ChartConfig {
+  const xFull = result.groupLabels.map(String)
   return {
     id: `anova_means_${Date.now()}`,
     type: 'groupedBar',
     data: [{
-      x: result.groupLabels.map(String),
+      x: xFull.map((l) => truncateLabel(l, 40)),
       y: result.groupMeans,
       type: 'bar',
       marker: { color: brandColors[0] },
@@ -55,12 +56,14 @@ function buildGroupMeansChart(result: ANOVAResult, columnName: string): ChartCon
       },
       text: result.groupMeans.map((m) => m.toFixed(2)),
       textposition: 'outside',
+      customdata: xFull,
+      hovertemplate: '%{customdata}: %{y:.2f}<extra></extra>',
     }],
     layout: {
       ...baseLayout,
-      title: { text: `${columnName} by Group (± SE)` },
-      yaxis: { title: { text: columnName } },
-      xaxis: { title: { text: 'Group' } },
+      title: { text: `${truncateLabel(columnName, 50)} by Group (± SE)` },
+      yaxis: { title: { text: truncateLabel(columnName, 40) } },
+      xaxis: { title: { text: 'Group' }, automargin: true },
     },
     config: baseConfig,
     stepId: 'anova_oneway',

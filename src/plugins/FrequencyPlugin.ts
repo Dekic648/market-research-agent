@@ -6,7 +6,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import type {
   AnalysisPlugin,
   PluginStepResult,
@@ -172,23 +172,28 @@ function computeFrequency(
 // ============================================================
 
 function buildHorizontalBarChart(freq: ColumnFrequency): ChartConfig {
+  const yLabels = freq.items.map((it) => String(it.value))
+  const yDisplay = yLabels.map((l) => truncateLabel(l, 50))
+
   return {
     id: `frequency_bar_${freq.columnId}_${Date.now()}`,
     type: 'horizontalBar',
     data: [
       {
-        y: freq.items.map((it) => String(it.value)),
+        y: yDisplay,
         x: freq.items.map((it) => it.pct),
         type: 'bar',
         orientation: 'h',
         marker: { color: brandColors[0] },
         text: freq.items.map((it) => `${it.pct.toFixed(1)}%`),
         textposition: 'outside',
+        customdata: yLabels,
+        hovertemplate: '%{customdata}: %{x:.1f}%<extra></extra>',
       },
     ],
     layout: {
       ...baseLayout,
-      title: { text: freq.columnName },
+      title: { text: truncateLabel(freq.columnName, 70) },
       xaxis: { title: { text: '%' }, range: [0, 100] },
       yaxis: { automargin: true },
     },
@@ -230,7 +235,8 @@ function buildDivergingStackedBar(
       name: String(sp),
       type: 'bar',
       orientation: 'h',
-      y: numericFreqs.map((f) => f.columnName),
+      y: numericFreqs.map((f) => truncateLabel(f.columnName, 50)),
+      customdata: numericFreqs.map((f) => f.columnName),
       x: numericFreqs.map((f) => {
         const item = f.items.find((it) => Number(it.value) === sp)
         const pct = item?.pct ?? 0
@@ -313,7 +319,7 @@ function buildGroupedBarBySegment(
     layout: {
       ...baseLayout,
       barmode: 'group',
-      title: { text: `${columnName} — % by ${segment.name}` },
+      title: { text: `${truncateLabel(columnName, 50)} — % by ${truncateLabel(segment.name, 30)}` },
       yaxis: { title: { text: '% of segment' }, range: [0, 100] },
       xaxis: { title: { text: 'Response' } },
       showlegend: true,

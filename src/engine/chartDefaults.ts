@@ -21,6 +21,26 @@ export const baseLayout = {
   margin: { l: 60, r: 20, t: 50, b: 80 },
 }
 
+/**
+ * Truncate a label to maxLen characters, appending "…" if it exceeds.
+ * Preserves the original value for hover tooltips.
+ */
+export function truncateLabel(label: string, maxLen = 40): string {
+  if (label.length <= maxLen) return label
+  return label.slice(0, maxLen - 1).trimEnd() + '…'
+}
+
+/**
+ * Truncate an array of labels. Returns { display, full } so callers
+ * can use display for axis ticks and full for hover text.
+ */
+export function truncateLabels(labels: string[], maxLen = 40): { display: string[]; full: string[] } {
+  return {
+    display: labels.map((l) => truncateLabel(l, maxLen)),
+    full: labels,
+  }
+}
+
 /** Standard color palette for market research charts */
 export const brandColors = [
   '#378add', // blue

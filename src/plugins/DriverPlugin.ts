@@ -7,7 +7,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -33,17 +33,19 @@ function buildDriverChart(r: DriverResult): ChartConfig {
     id: `driver_importance_${Date.now()}`,
     type: 'betaImportance',
     data: [{
-      y: sorted.map((p) => p.name),
+      y: sorted.map((p) => truncateLabel(p.name, 50)),
       x: sorted.map((p) => p.importance),
       type: 'bar',
       orientation: 'h',
       marker: { color: sorted.map((p) => p.p < 0.05 ? brandColors[1] : '#b4b2a9') },
       text: sorted.map((p) => `${(p.importance * 100).toFixed(1)}%`),
       textposition: 'outside',
+      customdata: sorted.map((p) => p.name),
+      hovertemplate: '%{customdata}: %{x:.1%}<extra></extra>',
     }],
     layout: {
       ...baseLayout,
-      title: { text: `Key Drivers of ${r.outcomeName} (R² = ${r.R2.toFixed(3)})` },
+      title: { text: `Key Drivers of ${truncateLabel(r.outcomeName, 40)} (R² = ${r.R2.toFixed(3)})` },
       xaxis: { title: { text: 'Relative Importance' }, tickformat: '.0%' },
       yaxis: { automargin: true },
     },

@@ -6,7 +6,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, truncateLabels } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -24,27 +24,33 @@ interface CorrelationResult {
 
 function buildCorrelationHeatmap(r: CorrelationResult): ChartConfig {
   const methodLabel = r.correlationMethod === 'spearman' ? 'Spearman Rank' : 'Pearson'
+  const labels = truncateLabels(r.columnNames, 45)
+
   return {
     id: `correlation_heatmap_${Date.now()}`,
     type: 'heatmap',
     data: [{
       z: r.matrix,
-      x: r.columnNames,
-      y: r.columnNames,
+      x: labels.display,
+      y: labels.display,
       type: 'heatmap',
       colorscale: [[0, '#e24b4a'], [0.5, '#f8f7f4'], [1, '#1d9e75']],
       zmid: 0,
       zmin: -1,
       zmax: 1,
       text: r.matrix.map((row, i) =>
-        row.map((v, j) => `${r.correlationMethod === 'spearman' ? 'rho' : 'r'} = ${v.toFixed(3)}${r.pValues[i][j] < 0.05 ? '*' : ''}`)
+        row.map((v, j) => {
+          const sym = r.correlationMethod === 'spearman' ? 'rho' : 'r'
+          const sig = r.pValues[i][j] < 0.05 ? '*' : ''
+          return `${labels.full[i]} × ${labels.full[j]}<br>${sym} = ${v.toFixed(3)}${sig}`
+        })
       ),
       hoverinfo: 'text',
     }],
     layout: {
       ...baseLayout,
       title: { text: `${methodLabel} Correlation Matrix` },
-      xaxis: { tickangle: -45 },
+      xaxis: { tickangle: -45, automargin: true },
       yaxis: { automargin: true },
     },
     config: baseConfig,

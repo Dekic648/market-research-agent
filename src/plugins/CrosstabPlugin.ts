@@ -6,7 +6,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import type {
   AnalysisPlugin,
   PluginStepResult,
@@ -110,8 +110,10 @@ function computeCrosstab(
 
 function buildHeatmapChart(ct: CrosstabResult): ChartConfig {
   const z = ct.table.map((row) => row.map((cell) => cell.colPct))
-  const text = ct.table.map((row) => row.map((cell) =>
-    `${cell.colPct.toFixed(1)}% (n=${cell.count}, idx=${cell.index.toFixed(0)})`
+  const xFull = ct.colLabels.map(String)
+  const yFull = ct.rowLabels.map(String)
+  const text = ct.table.map((row, ri) => row.map((cell, ci) =>
+    `${yFull[ri]} × ${xFull[ci]}<br>${cell.colPct.toFixed(1)}% (n=${cell.count}, idx=${cell.index.toFixed(0)})`
   ))
 
   return {
@@ -119,8 +121,8 @@ function buildHeatmapChart(ct: CrosstabResult): ChartConfig {
     type: 'heatmap',
     data: [{
       z,
-      x: ct.colLabels.map(String),
-      y: ct.rowLabels.map(String),
+      x: xFull.map((l) => truncateLabel(l, 40)),
+      y: yFull.map((l) => truncateLabel(l, 40)),
       type: 'heatmap',
       colorscale: 'Blues',
       text,
@@ -128,9 +130,9 @@ function buildHeatmapChart(ct: CrosstabResult): ChartConfig {
     }],
     layout: {
       ...baseLayout,
-      title: { text: `${ct.columnName} × ${ct.segmentName}` },
-      xaxis: { title: { text: ct.segmentName } },
-      yaxis: { title: { text: ct.columnName }, automargin: true },
+      title: { text: `${truncateLabel(ct.columnName, 40)} × ${truncateLabel(ct.segmentName, 30)}` },
+      xaxis: { title: { text: truncateLabel(ct.segmentName, 40) }, automargin: true },
+      yaxis: { title: { text: truncateLabel(ct.columnName, 40) }, automargin: true },
     },
     config: baseConfig,
     stepId: 'crosstab',
@@ -139,10 +141,11 @@ function buildHeatmapChart(ct: CrosstabResult): ChartConfig {
 }
 
 function buildGroupedBarChart(ct: CrosstabResult): ChartConfig {
+  const xFull = ct.rowLabels.map(String)
   const traces = ct.colLabels.map((seg, ci) => ({
-    name: String(seg),
+    name: truncateLabel(String(seg), 30),
     type: 'bar',
-    x: ct.rowLabels.map(String),
+    x: xFull.map((l) => truncateLabel(l, 40)),
     y: ct.table.map((row) => row[ci].colPct),
     marker: { color: brandColors[ci % brandColors.length] },
   }))
@@ -154,8 +157,9 @@ function buildGroupedBarChart(ct: CrosstabResult): ChartConfig {
     layout: {
       ...baseLayout,
       barmode: 'group',
-      title: { text: `${ct.columnName} by ${ct.segmentName}` },
+      title: { text: `${truncateLabel(ct.columnName, 40)} by ${truncateLabel(ct.segmentName, 30)}` },
       yaxis: { title: { text: '% within segment' } },
+      xaxis: { automargin: true },
     },
     config: baseConfig,
     stepId: 'crosstab',

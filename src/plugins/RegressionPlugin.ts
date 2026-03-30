@@ -3,7 +3,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -59,13 +59,15 @@ function buildBetaChart(r: RegressionResultData): ChartConfig {
     id: `regression_beta_${Date.now()}`,
     type: 'betaImportance',
     data: [{
-      y: sorted.map((c) => c.name),
+      y: sorted.map((c) => truncateLabel(c.name, 50)),
       x: sorted.map((c) => c.beta),
       type: 'bar',
       orientation: 'h',
       marker: { color: sorted.map((c) => c.p < 0.05 ? brandColors[0] : '#b4b2a9') },
       text: sorted.map((c) => `β=${c.beta.toFixed(3)} (${c.p < 0.05 ? '*' : 'ns'})`),
       textposition: 'outside',
+      customdata: sorted.map((c) => c.name),
+      hovertemplate: '%{customdata}<br>β = %{x:.3f}<extra></extra>',
     }],
     layout: {
       ...baseLayout,

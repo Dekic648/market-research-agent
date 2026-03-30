@@ -8,7 +8,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -37,6 +37,7 @@ interface DescriptivesResult {
 }
 
 function buildHistogram(stat: DescriptiveStats, values: number[]): ChartConfig {
+  const nameShort = truncateLabel(stat.columnName, 50)
   return {
     id: `descriptives_hist_${stat.columnName}_${Date.now()}`,
     type: 'histogram' as any,
@@ -45,12 +46,12 @@ function buildHistogram(stat: DescriptiveStats, values: number[]): ChartConfig {
       type: 'histogram',
       nbinsx: 20,
       marker: { color: brandColors[0], opacity: 0.8 },
-      name: stat.columnName,
+      name: nameShort,
     }],
     layout: {
       ...baseLayout,
-      title: { text: `Distribution: ${stat.columnName}` },
-      xaxis: { title: { text: stat.columnName } },
+      title: { text: `Distribution: ${nameShort}` },
+      xaxis: { title: { text: nameShort } },
       yaxis: { title: { text: 'Count' } },
     },
     config: baseConfig,
@@ -60,20 +61,21 @@ function buildHistogram(stat: DescriptiveStats, values: number[]): ChartConfig {
 }
 
 function buildBoxPlot(stat: DescriptiveStats, values: number[]): ChartConfig {
+  const nameShort = truncateLabel(stat.columnName, 50)
   return {
     id: `descriptives_box_${stat.columnName}_${Date.now()}`,
     type: 'boxPlot' as any,
     data: [{
       y: values,
       type: 'box',
-      name: stat.columnName,
+      name: nameShort,
       marker: { color: brandColors[1] },
       boxmean: true,
     }],
     layout: {
       ...baseLayout,
-      title: { text: `Box Plot: ${stat.columnName}` },
-      yaxis: { title: { text: stat.columnName } },
+      title: { text: `Box Plot: ${nameShort}` },
+      yaxis: { title: { text: nameShort } },
     },
     config: baseConfig,
     stepId: 'descriptives',

@@ -7,7 +7,7 @@
  */
 
 import { AnalysisRegistry } from './AnalysisRegistry'
-import { baseConfig, baseLayout, brandColors } from '../engine/chartDefaults'
+import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin,
@@ -98,13 +98,15 @@ function buildSignificanceMap(results: ColumnSignificance[]): ChartConfig {
   const sorted = [...results].sort((a, b) => a.p - b.p)
   const negLogP = sorted.map((r) => -Math.log10(Math.max(r.p, 1e-300)))
   const threshold = -Math.log10(0.05)
+  const yDisplay = sorted.map((r) => truncateLabel(r.columnName, 50))
+  const yFull = sorted.map((r) => r.columnName)
 
   return {
     id: `significance_map_${Date.now()}`,
     type: 'significanceMap',
     data: [
       {
-        y: sorted.map((r) => r.columnName),
+        y: yDisplay,
         x: negLogP,
         type: 'bar',
         orientation: 'h',
@@ -113,10 +115,12 @@ function buildSignificanceMap(results: ColumnSignificance[]): ChartConfig {
         },
         text: sorted.map((r) => `p=${r.p < 0.001 ? '<.001' : r.p.toFixed(3)}`),
         textposition: 'outside',
+        customdata: yFull,
+        hovertemplate: '%{customdata}<br>p = %{text}<extra></extra>',
       },
       {
         x: [threshold, threshold],
-        y: [sorted[0]?.columnName ?? '', sorted[sorted.length - 1]?.columnName ?? ''],
+        y: [yDisplay[0] ?? '', yDisplay[yDisplay.length - 1] ?? ''],
         mode: 'lines',
         line: { color: '#e24b4a', width: 2, dash: 'dash' },
         name: 'p = 0.05',
