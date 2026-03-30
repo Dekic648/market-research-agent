@@ -67,22 +67,25 @@ export function DistributionsTab({ findings, taskStepResults, questionOrder }: D
       )
       if (freqFindings.length === 0) continue
 
-      // Find the taskStepResult that produced these findings
-      let charts: import('../../types/dataTypes').ChartConfig[] = []
-      let tables: ResultTable[] = []
+      // Collect charts and tables from ALL matching taskStepResults
+      const charts: import('../../types/dataTypes').ChartConfig[] = []
+      const tables: ResultTable[] = []
       let summaryText = ''
+      const seenTaskIds = new Set<string>()
 
       for (const f of freqFindings) {
-        if (f.sourceTaskId && taskStepResults[f.sourceTaskId]) {
+        if (f.sourceTaskId && taskStepResults[f.sourceTaskId] && !seenTaskIds.has(f.sourceTaskId)) {
+          seenTaskIds.add(f.sourceTaskId)
           const sr = taskStepResults[f.sourceTaskId]
-          charts = sr.charts
-          tables = sr.tables ?? []
-          summaryText = sr.interpretationCard || f.summaryLanguage || sr.plainLanguage || ''
-          break
+          charts.push(...sr.charts)
+          if (sr.tables) tables.push(...sr.tables)
+          if (!summaryText) {
+            summaryText = sr.interpretationCard || f.summaryLanguage || sr.plainLanguage || ''
+          }
         }
       }
 
-      // If no charts found via taskId, fall back to summaryLanguage
+      // Fall back to summaryLanguage if no interpretation card
       if (!summaryText && freqFindings[0]) {
         summaryText = freqFindings[0].summaryLanguage || ''
       }
@@ -103,17 +106,18 @@ export function DistributionsTab({ findings, taskStepResults, questionOrder }: D
       }
 
       for (const [groupLabel, groupFindings] of labelGroups) {
-        let charts: import('../../types/dataTypes').ChartConfig[] = []
-        let tables: ResultTable[] = []
+        const charts: import('../../types/dataTypes').ChartConfig[] = []
+        const tables: ResultTable[] = []
         let summaryText = ''
+        const seenIds = new Set<string>()
 
         for (const f of groupFindings) {
-          if (f.sourceTaskId && taskStepResults[f.sourceTaskId]) {
+          if (f.sourceTaskId && taskStepResults[f.sourceTaskId] && !seenIds.has(f.sourceTaskId)) {
+            seenIds.add(f.sourceTaskId)
             const sr = taskStepResults[f.sourceTaskId]
-            charts = sr.charts
-            tables = sr.tables ?? []
-            summaryText = sr.interpretationCard || f.summaryLanguage || sr.plainLanguage || ''
-            break
+            charts.push(...sr.charts)
+            if (sr.tables) tables.push(...sr.tables)
+            if (!summaryText) summaryText = sr.interpretationCard || f.summaryLanguage || sr.plainLanguage || ''
           }
         }
         if (!summaryText && groupFindings[0]) summaryText = groupFindings[0].summaryLanguage || ''

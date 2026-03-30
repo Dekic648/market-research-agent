@@ -243,11 +243,13 @@ export function DataWorkspace() {
           completedPlugins.push(task.pluginId)
           taskStepMap[task.id] = result
 
-          // Derive question label from task label or source blocks
-          const questionLabel = task.label || task.sourceQuestionIds
+          // Derive question label from source blocks (preferred) or task label
+          const blockLabels = task.sourceQuestionIds
             .map((qid) => blockMap.get(qid)?.label)
             .filter(Boolean)
-            .join(' + ') || ''
+          const questionLabel = blockLabels.length > 0
+            ? blockLabels.join(' + ')
+            : task.label || ''
 
           for (const fi of result.findings) {
             const finding = {
