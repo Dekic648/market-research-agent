@@ -22,6 +22,16 @@ interface CrosstabBlockData {
   table: ResultTable | null
 }
 
+/** Check if a finding's sourceQuestionLabel matches a block label */
+function labelMatches(finding: Finding, blockLabel: string): boolean {
+  const sql = finding.sourceQuestionLabel
+  if (!sql) return false
+  if (sql === blockLabel) return true
+  if (sql.endsWith(': ' + blockLabel)) return true
+  if (sql.includes(blockLabel)) return true
+  return false
+}
+
 export function CrosstabsTab({ findings, taskStepResults, questionOrder }: CrosstabsTabProps) {
   // Check if any segment variable exists
   const hasSegment = findings.some((f) => f.stepId === 'crosstab')
@@ -32,7 +42,7 @@ export function CrosstabsTab({ findings, taskStepResults, questionOrder }: Cross
 
     for (const label of questionOrder) {
       const xtabFindings = findings.filter((f) =>
-        f.stepId === 'crosstab' && f.sourceQuestionLabel === label && !f.suppressed
+        f.stepId === 'crosstab' && labelMatches(f, label) && !f.suppressed
       )
       if (xtabFindings.length === 0) continue
 
@@ -51,6 +61,34 @@ export function CrosstabsTab({ findings, taskStepResults, questionOrder }: Cross
       }
 
       result.push({ label, groupedBar, heatmap, table })
+    }
+
+    // Fallback: if ordered matching found nothing, group by sourceQuestionLabel
+    if (result.length === 0) {
+      const xtabFindings = findings.filter((f) => f.stepId === 'crosstab' && !f.suppressed)
+      const labelGroups = new Map<string, Finding[]>()
+      for (const f of xtabFindings) {
+        const key = f.sourceQuestionLabel || f.title
+        if (!labelGroups.has(key)) labelGroups.set(key, [])
+        labelGroups.get(key)!.push(f)
+      }
+
+      for (const [groupLabel, groupFindings] of labelGroups) {
+        let groupedBar: ChartConfig | null = null
+        let heatmap: ChartConfig | null = null
+        let table: ResultTable | null = null
+
+        for (const f of groupFindings) {
+          if (f.sourceTaskId && taskStepResults[f.sourceTaskId]) {
+            const sr = taskStepResults[f.sourceTaskId]
+            groupedBar = sr.charts.find((c) => c.type === 'groupedBar') ?? null
+            heatmap = sr.charts.find((c) => c.type === 'heatmap') ?? null
+            table = sr.tables?.[0] ?? null
+            break
+          }
+        }
+        result.push({ label: groupLabel, groupedBar, heatmap, table })
+      }
     }
 
     return result

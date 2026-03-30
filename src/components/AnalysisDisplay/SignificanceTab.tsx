@@ -17,6 +17,16 @@ interface SignificanceTabProps {
 
 const SIG_STEP_IDS = new Set(['kw_significance', 'anova_oneway'])
 
+/** Check if a finding's sourceQuestionLabel matches a block label */
+function labelMatches(finding: Finding, blockLabel: string): boolean {
+  const sql = finding.sourceQuestionLabel
+  if (!sql) return false
+  if (sql === blockLabel) return true
+  if (sql.endsWith(': ' + blockLabel)) return true
+  if (sql.includes(blockLabel)) return true
+  return false
+}
+
 interface SigBlockData {
   label: string
   finding: Finding
@@ -26,7 +36,11 @@ interface SigBlockData {
 /** Extract pairwise comparisons from posthoc finding detail */
 function extractPosthocPairs(findings: Finding[], label: string): string[] {
   const posthocFinding = findings.find((f) =>
-    f.stepId === 'posthoc' && f.sourceQuestionLabel === label && f.significant
+    f.stepId === 'posthoc' && f.significant && (
+      f.sourceQuestionLabel === label ||
+      (f.sourceQuestionLabel?.endsWith(': ' + label)) ||
+      (f.sourceQuestionLabel?.includes(label))
+    )
   )
   if (!posthocFinding) return []
 
@@ -48,14 +62,14 @@ export function SignificanceTab({ findings, taskStepResults, questionOrder, show
 
     for (const label of questionOrder) {
       const sigFinding = findings.find((f) =>
-        SIG_STEP_IDS.has(f.stepId) && f.sourceQuestionLabel === label && !f.suppressed
+        SIG_STEP_IDS.has(f.stepId) && labelMatches(f, label) && !f.suppressed
       )
       if (!sigFinding) continue
       const posthocPairs = extractPosthocPairs(findings, label)
       result.push({ label, finding: sigFinding, posthocPairs })
     }
 
-    // Also catch findings with no questionOrder match
+    // Fallback: catch all significance findings not matched by questionOrder
     const coveredLabels = new Set(result.map((b) => b.label))
     for (const f of findings) {
       if (!SIG_STEP_IDS.has(f.stepId) || f.suppressed) continue

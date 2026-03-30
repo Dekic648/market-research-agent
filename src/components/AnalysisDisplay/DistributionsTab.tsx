@@ -45,19 +45,25 @@ interface QuestionBlockData {
   n: number | null
 }
 
+/** Check if a finding's sourceQuestionLabel matches a block label.
+ *  TaskProposer prefixes labels like "Frequency: BlockLabel", so we use endsWith. */
+function labelMatches(finding: Finding, blockLabel: string): boolean {
+  const sql = finding.sourceQuestionLabel
+  if (!sql) return false
+  if (sql === blockLabel) return true
+  if (sql.endsWith(': ' + blockLabel)) return true
+  if (sql.includes(blockLabel)) return true
+  return false
+}
+
 export function DistributionsTab({ findings, taskStepResults, questionOrder }: DistributionsTabProps) {
   const blocks = useMemo(() => {
     const result: QuestionBlockData[] = []
 
     for (const label of questionOrder) {
-      // Find frequency results for this question
-      const matchingEntries = Object.entries(taskStepResults).filter(([, sr]) =>
-        sr.pluginId === 'frequency'
-      )
-
-      // Match by finding's sourceQuestionLabel
+      // Match by finding's sourceQuestionLabel (handles plugin prefix)
       const freqFindings = findings.filter((f) =>
-        f.stepId === 'frequency' && f.sourceQuestionLabel === label && !f.suppressed
+        f.stepId === 'frequency' && labelMatches(f, label) && !f.suppressed
       )
       if (freqFindings.length === 0) continue
 
@@ -84,6 +90,36 @@ export function DistributionsTab({ findings, taskStepResults, questionOrder }: D
       const stats = freqFindings[0] ? extractStats(freqFindings[0]) : { mean: null, n: null }
 
       result.push({ label, charts, tables, summaryText, ...stats })
+    }
+
+    // Fallback: if ordered matching found nothing, group all frequency findings by sourceQuestionLabel
+    if (result.length === 0) {
+      const freqFindings = findings.filter((f) => f.stepId === 'frequency' && !f.suppressed)
+      const labelGroups = new Map<string, Finding[]>()
+      for (const f of freqFindings) {
+        const key = f.sourceQuestionLabel || f.title
+        if (!labelGroups.has(key)) labelGroups.set(key, [])
+        labelGroups.get(key)!.push(f)
+      }
+
+      for (const [groupLabel, groupFindings] of labelGroups) {
+        let charts: import('../../types/dataTypes').ChartConfig[] = []
+        let tables: ResultTable[] = []
+        let summaryText = ''
+
+        for (const f of groupFindings) {
+          if (f.sourceTaskId && taskStepResults[f.sourceTaskId]) {
+            const sr = taskStepResults[f.sourceTaskId]
+            charts = sr.charts
+            tables = sr.tables ?? []
+            summaryText = sr.interpretationCard || f.summaryLanguage || sr.plainLanguage || ''
+            break
+          }
+        }
+        if (!summaryText && groupFindings[0]) summaryText = groupFindings[0].summaryLanguage || ''
+        const stats = groupFindings[0] ? extractStats(groupFindings[0]) : { mean: null, n: null }
+        result.push({ label: groupLabel, charts, tables, summaryText, ...stats })
+      }
     }
 
     return result
