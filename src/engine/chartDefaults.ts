@@ -26,8 +26,10 @@ export const baseLayout = {
  * Preserves the original value for hover tooltips.
  */
 export function truncateLabel(label: string, maxLen = 40): string {
-  if (label.length <= maxLen) return label
-  return label.slice(0, maxLen - 1).trimEnd() + '…'
+  if (!label) return label ?? ''
+  const s = typeof label === 'string' ? label : String(label)
+  if (s.length <= maxLen) return s
+  return s.slice(0, maxLen - 1).trimEnd() + '…'
 }
 
 /**
