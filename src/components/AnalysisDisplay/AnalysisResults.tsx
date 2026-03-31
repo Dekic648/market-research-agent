@@ -49,6 +49,18 @@ export function AnalysisResults({ runResult, taskStepResults }: AnalysisResultsP
   // Count non-significant findings for the toggle label
   const nonSigCount = findings.filter((f) => !f.suppressed && !f.significant && f.pValue !== null).length
 
+  // Detect weighted analysis from findings
+  const weightedBy = useMemo(() => {
+    for (const f of findings) {
+      if (f.weightedBy) return f.weightedBy
+      try {
+        const detail = JSON.parse(f.detail)
+        if (detail.weighted) return detail.weightColumnName ?? 'weights'
+      } catch { /* ignore */ }
+    }
+    return null
+  }, [findings])
+
   return (
     <div className="analysis-results">
       <ResultsPageHeader
@@ -60,6 +72,13 @@ export function AnalysisResults({ runResult, taskStepResults }: AnalysisResultsP
       />
 
       <FlagsStrip findings={findings} />
+
+      {/* Weighted analysis banner */}
+      {weightedBy && (
+        <div className="results-weighted-banner">
+          &#9878; Weighted analysis — weights from {weightedBy}
+        </div>
+      )}
 
       {/* 5-tab bar */}
       <div className="results-tab-bar">

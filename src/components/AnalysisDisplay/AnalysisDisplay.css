@@ -92,6 +92,17 @@
   cursor: pointer; font-size: 0.8rem; padding: 0;
 }
 .corr-clear-btn:hover { text-decoration: underline; }
+/* Weighted analysis banner */
+.results-weighted-banner {
+  padding: 8px 16px;
+  background: #eff6ff;
+  border-left: 3px solid #378add;
+  border-radius: var(--radius, 6px);
+  font-size: 0.85rem;
+  color: #1e40af;
+  margin-bottom: 12px;
+}
+
 /* Top-2 Box callout */
 .dist-topbox-callout {
   font-size: 1rem;
