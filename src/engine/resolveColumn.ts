@@ -55,10 +55,10 @@ export function resolveColumn(
     values = applyTransform(values, transform)
   }
 
-  // Multi-response (Alchemer checkbox format): normalize code values to binary 1/0.
-  // Non-null value (the option code) → 1 (selected). Null → 0 (not selected).
+  // Multi-response (checkbox grid): any non-null value = chosen, null = not chosen.
+  // Normalize to 'Selected'/'Not selected' labels for clean display in charts/tables.
   if (definition.type === 'multi_response') {
-    values = values.map((v) => v === null ? 0 : 1)
+    values = values.map((v) => v === null ? 'Not selected' : 'Selected')
     return values
   }
 

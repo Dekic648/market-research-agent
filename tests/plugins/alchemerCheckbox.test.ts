@@ -135,7 +135,7 @@ describe('resolveColumn — multi_response normalization', () => {
       declaredScaleRange: null,
     }
     const resolved = resolveColumn(col)
-    expect(resolved).toEqual([1, 0, 1, 0, 1, 0])
+    expect(resolved).toEqual(['Selected', 'Not selected', 'Selected', 'Not selected', 'Selected', 'Not selected'])
   })
 
   it('handles mixed code values (all become 1)', () => {
@@ -157,7 +157,7 @@ describe('resolveColumn — multi_response normalization', () => {
       declaredScaleRange: null,
     }
     const resolved = resolveColumn(col)
-    expect(resolved).toEqual([1, 0, 1, 1])
+    expect(resolved).toEqual(['Selected', 'Not selected', 'Selected', 'Selected'])
   })
 })
 
