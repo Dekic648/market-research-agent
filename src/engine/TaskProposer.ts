@@ -389,7 +389,7 @@ export function proposeTasks(
 
   // Survey × Behavioral bridge
   const surveyBridgeBlocks = allAnalyzable.filter((b) =>
-    ['rating', 'matrix', 'checkbox'].includes(b.format) && b.confirmed
+    ['rating', 'matrix', 'checkbox', 'radio'].includes(b.format) && b.confirmed
   )
   const behavioralBridgeBlocks = allAnalyzable.filter((b) =>
     b.format === 'behavioral' && b.confirmed
@@ -404,7 +404,8 @@ export function proposeTasks(
     // Rule 1: correlation for behavioral × rating pairs (max 3 each side)
     const topBehavioral = behavioralBridgeBlocks.slice(0, 3)
     const topSurvey = surveyBridgeBlocks
-      .filter((b) => b.format === 'rating' || b.format === 'matrix')
+      .filter((b) => b.format === 'rating' || b.format === 'matrix'
+        || (b.format === 'radio' && b.columns.some((c) => c.statisticalType === 'ordinal')))
       .slice(0, 3)
 
     if (pluginExists('correlation')) {
