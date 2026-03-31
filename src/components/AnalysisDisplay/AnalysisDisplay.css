@@ -85,6 +85,13 @@
 .corr-pair { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--chart-grid, #e8e6df); font-size: 0.85rem; }
 .corr-pair-label { font-weight: 600; white-space: nowrap; min-width: 200px; }
 .corr-pair-ns { opacity: 0.4; }
+.corr-selection-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.corr-selection-label { font-size: 0.85rem; }
+.corr-clear-btn {
+  background: none; border: none; color: var(--link-color, #378add);
+  cursor: pointer; font-size: 0.8rem; padding: 0;
+}
+.corr-clear-btn:hover { text-decoration: underline; }
 .corr-pair-summary { color: var(--text-muted, #6b7280); }
 
 /* Significance summary header */

@@ -1,8 +1,11 @@
 /**
- * CorrelationsTab — Tab IV: correlation matrix and pair list.
+ * CorrelationsTab — Tab IV: interactive correlation matrix and pair list.
+ *
+ * Click a column header or cell to highlight that question's row + column
+ * and filter the pair list to its correlates.
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { Finding } from '../../types/dataTypes'
 
 interface CorrelationsTabProps {
@@ -24,7 +27,6 @@ function extractPairs(findings: Finding[]): CorrelationPair[] {
     .filter((f) => f.stepId === 'correlation' && !f.suppressed)
     .map((f) => {
       const cols = f.sourceColumns ?? []
-      // Fall back to parsing title: "ColA ↔ ColB: r = 0.xxx"
       let colA = cols[0] ?? ''
       let colB = cols[1] ?? ''
       if (!colA || !colB) {
@@ -66,9 +68,9 @@ function getR(pairs: CorrelationPair[], a: string, b: string): number | null {
 /** Map r value to a background color */
 function rToColor(r: number): string {
   const abs = Math.min(1, Math.abs(r))
-  const alpha = Math.round(abs * 60 + 10) // 10–70% opacity
-  if (r > 0) return `rgba(29, 158, 117, ${alpha / 100})` // teal
-  if (r < 0) return `rgba(226, 75, 74, ${alpha / 100})`  // red
+  const alpha = Math.round(abs * 60 + 10)
+  if (r > 0) return `rgba(29, 158, 117, ${alpha / 100})`
+  if (r < 0) return `rgba(226, 75, 74, ${alpha / 100})`
   return 'transparent'
 }
 
@@ -81,6 +83,7 @@ function truncateCol(name: string, max = 20): string {
 export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) {
   const pairs = useMemo(() => extractPairs(findings), [findings])
   const columns = useMemo(() => getUniqueColumns(pairs), [pairs])
+  const [selectedCol, setSelectedCol] = useState<string | null>(null)
 
   if (pairs.length === 0) {
     return (
@@ -90,7 +93,18 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
     )
   }
 
-  const visiblePairs = showNonSig ? pairs : pairs.filter((p) => p.significant)
+  const toggleCol = (col: string) => setSelectedCol(col === selectedCol ? null : col)
+
+  // Filter pair list when a column is selected
+  const basePairs = showNonSig ? pairs : pairs.filter((p) => p.significant)
+  const displayPairs = selectedCol
+    ? basePairs.filter((p) => p.colA === selectedCol || p.colB === selectedCol)
+    : basePairs
+
+  const isHighlighted = (rowCol: string, colCol: string) =>
+    selectedCol !== null && (rowCol === selectedCol || colCol === selectedCol)
+
+  const isHeaderSelected = (col: string) => col === selectedCol
 
   return (
     <div className="correlations-tab">
@@ -102,7 +116,21 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
               <tr>
                 <th></th>
                 {columns.map((col) => (
-                  <th key={col} title={col} style={{ fontSize: '0.75rem', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <th
+                    key={col}
+                    title={col}
+                    onClick={() => toggleCol(col)}
+                    style={{
+                      fontSize: '0.75rem',
+                      maxWidth: 100,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      fontWeight: isHeaderSelected(col) ? 700 : 400,
+                      borderBottom: isHeaderSelected(col) ? '2px solid var(--color-primary, #378add)' : undefined,
+                    }}
+                  >
                     {truncateCol(col)}
                   </th>
                 ))}
@@ -111,22 +139,53 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
             <tbody>
               {columns.map((rowCol) => (
                 <tr key={rowCol}>
-                  <td title={rowCol} style={{ fontSize: '0.75rem', fontWeight: 600, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td
+                    title={rowCol}
+                    onClick={() => toggleCol(rowCol)}
+                    style={{
+                      fontSize: '0.75rem',
+                      fontWeight: isHeaderSelected(rowCol) ? 700 : 600,
+                      maxWidth: 140,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      borderLeft: isHeaderSelected(rowCol) ? '2px solid var(--color-primary, #378add)' : undefined,
+                    }}
+                  >
                     {truncateCol(rowCol, 25)}
                   </td>
                   {columns.map((colCol) => {
                     if (rowCol === colCol) {
-                      return <td key={colCol} style={{ background: '#e8e6df', textAlign: 'center', fontSize: '0.75rem' }}>—</td>
+                      return (
+                        <td
+                          key={colCol}
+                          onClick={() => toggleCol(rowCol)}
+                          style={{
+                            background: '#e8e6df',
+                            textAlign: 'center',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            boxShadow: isHighlighted(rowCol, colCol) ? 'inset 0 0 0 2px var(--color-primary, #378add)' : undefined,
+                          }}
+                        >
+                          —
+                        </td>
+                      )
                     }
                     const r = getR(pairs, rowCol, colCol)
+                    const highlighted = isHighlighted(rowCol, colCol)
                     return (
                       <td
                         key={colCol}
+                        onClick={() => toggleCol(rowCol === selectedCol ? colCol : rowCol)}
                         style={{
                           background: r !== null ? rToColor(r) : 'transparent',
                           textAlign: 'center',
                           fontSize: '0.75rem',
                           fontWeight: r !== null && Math.abs(r) > 0.5 ? 700 : 400,
+                          cursor: 'pointer',
+                          boxShadow: highlighted ? 'inset 0 0 0 2px var(--color-primary, #378add)' : undefined,
                         }}
                         title={r !== null ? `${rowCol} × ${colCol}: r = ${r.toFixed(3)}` : ''}
                       >
@@ -141,9 +200,18 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
         </div>
       )}
 
-      {/* Pair list */}
+      {/* Pair list header */}
       <div className="corr-pair-list">
-        {visiblePairs.map((pair, i) => (
+        {selectedCol && (
+          <div className="corr-selection-header">
+            <span className="corr-selection-label">Correlates of: <strong>{selectedCol}</strong></span>
+            <button className="corr-clear-btn" onClick={() => setSelectedCol(null)}>
+              Clear selection
+            </button>
+          </div>
+        )}
+
+        {displayPairs.map((pair, i) => (
           <div
             key={`${pair.colA}_${pair.colB}_${i}`}
             className={`corr-pair ${pair.significant ? '' : 'corr-pair-ns'}`}
@@ -152,9 +220,14 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
             <span className="corr-pair-summary">{pair.summaryLanguage}</span>
           </div>
         ))}
-        {!showNonSig && pairs.length > visiblePairs.length && (
+
+        {displayPairs.length === 0 && selectedCol && (
+          <div className="results-ns-hint">No correlations found for {selectedCol}.</div>
+        )}
+
+        {!selectedCol && !showNonSig && pairs.length > basePairs.length && (
           <div className="results-ns-hint">
-            {pairs.length - visiblePairs.length} non-significant correlations hidden
+            {pairs.length - basePairs.length} non-significant correlations hidden
           </div>
         )}
       </div>
