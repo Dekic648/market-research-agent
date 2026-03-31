@@ -21,6 +21,9 @@ interface CorrelationPair {
   summaryLanguage: string
   redundancyFlag: boolean
   method: 'pearson' | 'spearman' | 'kendall'
+  partialR: number | null
+  partialP: number | null
+  controlName: string | null
 }
 
 /** Parse correlation findings into structured pairs */
@@ -41,10 +44,16 @@ function extractPairs(findings: Finding[]): CorrelationPair[] {
       // Parse redundancyFlag and method from detail JSON
       let redundancyFlag = false
       let method: 'pearson' | 'spearman' | 'kendall' = 'pearson'
+      let partialR: number | null = null
+      let partialP: number | null = null
+      let controlName: string | null = null
       try {
         const detail = JSON.parse(f.detail)
         redundancyFlag = detail.redundancyFlag === true
         if (detail.method === 'kendall' || detail.method === 'spearman') method = detail.method
+        if (typeof detail.partialR === 'number') partialR = detail.partialR
+        if (typeof detail.partialP === 'number') partialP = detail.partialP
+        if (detail.controlName) controlName = detail.controlName
       } catch { /* ignore */ }
 
       return {
@@ -55,6 +64,9 @@ function extractPairs(findings: Finding[]): CorrelationPair[] {
         summaryLanguage: f.summaryLanguage,
         redundancyFlag,
         method,
+        partialR,
+        partialP,
+        controlName,
       }
     })
     .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
@@ -238,6 +250,11 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
             </span>
             {pair.redundancyFlag && (
               <span className="corr-redundancy-flag">&#9888; Near-duplicate columns</span>
+            )}
+            {pair.partialR !== null && pair.controlName && (
+              <span className="corr-partial-r">
+                → partial r = {pair.partialR.toFixed(2)} (controlling for {pair.controlName})
+              </span>
             )}
             <span className="corr-pair-summary">{pair.summaryLanguage}</span>
           </div>

@@ -176,6 +176,43 @@ const CorrelationPlugin: AnalysisPlugin = {
       columnSkewness,
     }
 
+    // Compute partial correlations if a segment/control column is available
+    const controlCol = data.segment
+    const controlValues = controlCol
+      ? controlCol.values.map((v) => (v === null ? NaN : typeof v === 'number' ? v : parseFloat(String(v))))
+      : null
+
+    const partialMap = new Map<string, { partialR: number; partialP: number }>()
+    if (controlValues && controlValues.some((v) => !isNaN(v))) {
+      for (const pair of strongPairs) {
+        const iA = data.columns.findIndex((c) => c.name === pair.a)
+        const iB = data.columns.findIndex((c) => c.name === pair.b)
+        if (iA < 0 || iB < 0) continue
+
+        // Filter to complete cases across colA, colB, and control
+        const cleanA: number[] = []
+        const cleanB: number[] = []
+        const cleanCtrl: number[] = []
+        for (let row = 0; row < items[iA].length; row++) {
+          if (!isNaN(items[iA][row]) && !isNaN(items[iB][row]) && !isNaN(controlValues[row])) {
+            cleanA.push(items[iA][row])
+            cleanB.push(items[iB][row])
+            cleanCtrl.push(controlValues[row])
+          }
+        }
+
+        if (cleanA.length >= 10) {
+          try {
+            // @ts-ignore
+            const pr = StatsEngine.partialCorrelation(cleanA, cleanB, [cleanCtrl]) as any
+            if (!pr.error && typeof pr.r === 'number') {
+              partialMap.set(`${pair.a}|${pair.b}`, { partialR: pr.r, partialP: pr.p })
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    }
+
     const charts = [buildCorrelationHeatmap(result)]
 
     // Detect outcome column for driver callout
@@ -214,12 +251,18 @@ const CorrelationPlugin: AnalysisPlugin = {
         : pairMethod === 'spearman' ? ' Spearman rank correlation used — appropriate for skewed or zero-inflated data.'
         : ''
 
+      const partial = partialMap.get(`${pair.a}|${pair.b}`)
+      const controlName = controlCol?.name ?? null
+      const partialNote = partial
+        ? ` Controlling for ${controlName}: partial r = ${partial.partialR.toFixed(2)} (p = ${partial.partialP < 0.001 ? '<.001' : partial.partialP.toFixed(3)}).`
+        : ''
+
       return {
         type: 'correlation',
         title: `${pair.a} ↔ ${pair.b}: ${rLabel} = ${pair.r.toFixed(3)}`,
-        summary: `${Math.abs(pair.r) > 0.7 ? 'Strong' : 'Moderate'} ${pair.r > 0 ? 'positive' : 'negative'} correlation (p ${pair.p < 0.001 ? '< .001' : '= ' + pair.p.toFixed(3)}).${methodNote}${redundancyFlag ? ' Warning: r > 0.8 — these columns may be measuring the same thing. Consider merging or dropping one.' : ''}`,
+        summary: `${Math.abs(pair.r) > 0.7 ? 'Strong' : 'Moderate'} ${pair.r > 0 ? 'positive' : 'negative'} correlation (p ${pair.p < 0.001 ? '< .001' : '= ' + pair.p.toFixed(3)}).${methodNote}${redundancyFlag ? ' Warning: r > 0.8 — these columns may be measuring the same thing. Consider merging or dropping one.' : ''}${partialNote}`,
         summaryLanguage,
-        detail: JSON.stringify({ ...pair, redundancyFlag, method: pairMethod }),
+        detail: JSON.stringify({ ...pair, redundancyFlag, method: pairMethod, partialR: partial?.partialR ?? null, partialP: partial?.partialP ?? null, controlName }),
         significant: true,
         pValue: pair.p,
         effectSize: pair.r,

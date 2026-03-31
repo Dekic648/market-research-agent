@@ -7481,6 +7481,83 @@ function tukeyHSD(groups: number[][]): Array<{
 }
 
 /* ================================================================
+ *  WEIGHTED ANALYSIS FUNCTIONS
+ * ================================================================ */
+
+function weightedMean(values: number[], weights: number[]): number {
+  if (values.length !== weights.length) throw new Error('values and weights must have the same length')
+  let sumW = 0
+  let sumVW = 0
+  for (let i = 0; i < values.length; i++) {
+    sumW += weights[i]
+    sumVW += values[i] * weights[i]
+  }
+  if (sumW === 0) throw new Error('Sum of weights must not be zero')
+  return sumVW / sumW
+}
+
+function weightedFrequency(values: (number | string)[], weights: number[]): Map<string, { count: number; weightedCount: number; pct: number }> {
+  if (values.length !== weights.length) throw new Error('values and weights must have the same length')
+  const map = new Map<string, { count: number; weightedCount: number }>()
+  let totalWeight = 0
+
+  for (let i = 0; i < values.length; i++) {
+    const key = String(values[i])
+    const entry = map.get(key) ?? { count: 0, weightedCount: 0 }
+    entry.count++
+    entry.weightedCount += weights[i]
+    map.set(key, entry)
+    totalWeight += weights[i]
+  }
+
+  const result = new Map<string, { count: number; weightedCount: number; pct: number }>()
+  for (const [key, val] of map) {
+    result.set(key, {
+      count: val.count,
+      weightedCount: val.weightedCount,
+      pct: totalWeight > 0 ? (val.weightedCount / totalWeight) * 100 : 0,
+    })
+  }
+  return result
+}
+
+function weightedDescribe(values: number[], weights: number[]): { mean: number; variance: number; sd: number; n: number; effectiveN: number } {
+  if (values.length !== weights.length) throw new Error('values and weights must have the same length')
+  const n = values.length
+  const wMean = weightedMean(values, weights)
+
+  let sumW = 0
+  let sumW2 = 0
+  let sumWV2 = 0
+  for (let i = 0; i < n; i++) {
+    sumW += weights[i]
+    sumW2 += weights[i] * weights[i]
+    sumWV2 += weights[i] * (values[i] - wMean) ** 2
+  }
+
+  const wVariance = sumW > 0 ? sumWV2 / sumW : 0
+  const effectiveN = sumW2 > 0 ? (sumW * sumW) / sumW2 : 0
+
+  return {
+    mean: wMean,
+    variance: wVariance,
+    sd: Math.sqrt(wVariance),
+    n,
+    effectiveN,
+  }
+}
+
+function validateWeights(weights: number[]): { valid: boolean; warning: string | null } {
+  if (weights.some((w) => w < 0)) return { valid: false, warning: 'Weights contain negative values.' }
+  const total = weights.reduce((s, w) => s + w, 0)
+  if (total === 0) return { valid: false, warning: 'Weights sum to zero.' }
+  if (Math.abs(total - 1) > 0.01 && Math.abs(total - weights.length) > 0.01) {
+    return { valid: true, warning: `Weights sum to ${total.toFixed(2)}, not 1 — normalized internally.` }
+  }
+  return { valid: true, warning: null }
+}
+
+/* ================================================================
  *  EXPORTS
  * ================================================================ */
 
@@ -7505,6 +7582,7 @@ export {
   parallelLinesTest, bootstrapIndirectEffect, johnsonNeyman,
   powerTTest, powerANOVA, powerCorrelation, powerChiSq,
   interpret, STOPWORDS, SENTIMENT_LEXICON,
+  weightedMean, weightedFrequency, weightedDescribe, validateWeights,
 }
 
 export const _helpers = {

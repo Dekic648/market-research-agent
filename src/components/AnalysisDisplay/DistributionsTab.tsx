@@ -16,14 +16,19 @@ interface DistributionsTabProps {
   questionOrder: string[]
 }
 
-/** Extract mean and n from a frequency finding's detail or summary */
-function extractStats(finding: Finding): { mean: number | null; n: number | null } {
+/** Extract mean, n, and topBox from a frequency finding's detail or summary */
+function extractStats(finding: Finding): { mean: number | null; n: number | null; topBox: number | null; isLikert: boolean } {
   try {
     const detail = JSON.parse(finding.detail)
     if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
+      const topBox = typeof detail.topBox === 'number' ? detail.topBox : null
+      // Likert heuristic: topBox > 0 means scale with top/bottom box (ordinal, not categorical)
+      const isLikert = topBox !== null && topBox > 0
       return {
         mean: typeof detail.mean === 'number' ? detail.mean : null,
         n: typeof detail.n === 'number' ? detail.n : null,
+        topBox,
+        isLikert,
       }
     }
   } catch { /* not JSON */ }
@@ -33,6 +38,8 @@ function extractStats(finding: Finding): { mean: number | null; n: number | null
   return {
     mean: meanMatch ? parseFloat(meanMatch[1]) : null,
     n: nMatch ? parseInt(nMatch[1], 10) : null,
+    topBox: null,
+    isLikert: false,
   }
 }
 
@@ -43,6 +50,8 @@ interface QuestionBlockData {
   summaryText: string
   mean: number | null
   n: number | null
+  topBox: number | null
+  isLikert: boolean
 }
 
 /** Check if a finding's sourceQuestionLabel matches a block label */
@@ -88,7 +97,7 @@ export function DistributionsTab({ findings, taskStepResults, questionOrder }: D
         summaryText = freqFindings[0].summaryLanguage || ''
       }
 
-      const stats = freqFindings[0] ? extractStats(freqFindings[0]) : { mean: null, n: null }
+      const stats = freqFindings[0] ? extractStats(freqFindings[0]) : { mean: null, n: null, topBox: null, isLikert: false }
 
       result.push({ label, charts, tables, summaryText, ...stats })
     }
@@ -119,7 +128,7 @@ export function DistributionsTab({ findings, taskStepResults, questionOrder }: D
           }
         }
         if (!summaryText && groupFindings[0]) summaryText = groupFindings[0].summaryLanguage || ''
-        const stats = groupFindings[0] ? extractStats(groupFindings[0]) : { mean: null, n: null }
+        const stats = groupFindings[0] ? extractStats(groupFindings[0]) : { mean: null, n: null, topBox: null, isLikert: false }
         result.push({ label: groupLabel, charts, tables, summaryText, ...stats })
       }
     }
@@ -144,6 +153,39 @@ function DistributionBlock({ block }: { block: QuestionBlockData }) {
   const [tablesOpen, setTablesOpen] = useState(false)
   const displayLabel = truncateLabel(block.label, 60)
 
+  // Add Top-2 Box reference line to horizontal bar charts for Likert columns
+  const chartsWithAnnotation = useMemo(() => {
+    if (!block.isLikert || block.topBox === null) return block.charts
+    return block.charts.map((chart) => {
+      if (chart.type !== 'horizontalBar') return chart
+      const existingShapes = (chart.layout as any).shapes ?? []
+      return {
+        ...chart,
+        layout: {
+          ...chart.layout,
+          shapes: [
+            ...existingShapes,
+            {
+              type: 'line',
+              x0: block.topBox, x1: block.topBox,
+              y0: -0.5, y1: 10,
+              line: { color: '#1d9e75', dash: 'dot', width: 2 },
+            },
+          ],
+          annotations: [
+            ...((chart.layout as any).annotations ?? []),
+            {
+              x: block.topBox, y: 1.02, xref: 'x', yref: 'paper',
+              text: `Top 2 Box: ${block.topBox!.toFixed(0)}%`,
+              showarrow: false,
+              font: { size: 11, color: '#1d9e75', family: 'Inter, system-ui, sans-serif' },
+            },
+          ],
+        },
+      }
+    })
+  }, [block.charts, block.topBox, block.isLikert])
+
   return (
     <div className="result-question-block">
       <div className="rqb-header">
@@ -151,10 +193,17 @@ function DistributionBlock({ block }: { block: QuestionBlockData }) {
       </div>
 
       <div className="rqb-body">
+        {/* Top-2 Box callout */}
+        {block.isLikert && block.topBox !== null && (
+          <div className="dist-topbox-callout">
+            Top 2 Box: <strong>{block.topBox.toFixed(0)}%</strong>
+          </div>
+        )}
+
         {/* Charts */}
-        {block.charts.length > 0 && (
+        {chartsWithAnnotation.length > 0 && (
           <div className="rqb-charts">
-            {block.charts.map((chart) => (
+            {chartsWithAnnotation.map((chart) => (
               <ChartContainer key={chart.id} chart={chart} />
             ))}
           </div>

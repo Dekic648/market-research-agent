@@ -92,6 +92,15 @@
   cursor: pointer; font-size: 0.8rem; padding: 0;
 }
 .corr-clear-btn:hover { text-decoration: underline; }
+/* Top-2 Box callout */
+.dist-topbox-callout {
+  font-size: 1rem;
+  color: #1d9e75;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.dist-topbox-callout strong { font-weight: 700; font-size: 1.15rem; }
+
 /* Crosstab % mode toggle */
 .xtab-pct-toggle { display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 4px; }
 .xtab-pct-label { font-size: 0.75rem; color: var(--text-muted, #6b7280); text-align: right; margin-bottom: 8px; }
@@ -100,6 +109,10 @@
   display: inline-block; margin-left: 6px; padding: 0 6px;
   border-radius: 9999px; background: #e5e7eb; color: #374151;
   font-size: 0.65rem; font-weight: 600; vertical-align: middle;
+}
+.corr-partial-r {
+  display: inline-block; font-size: 0.75rem; color: var(--text-muted, #6b7280);
+  font-style: italic; margin-left: 6px;
 }
 .corr-matrix-legend { font-size: 0.75rem; color: var(--text-muted, #6b7280); margin-top: 6px; font-style: italic; }
 .corr-redundancy-flag {
