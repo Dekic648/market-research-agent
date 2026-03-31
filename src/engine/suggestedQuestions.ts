@@ -47,6 +47,7 @@ export function generateSuggestedQuestions(
   const categoryCols: ColumnDefinition[] = []
   const ratingCols: ColumnDefinition[] = []
   const timestampCols: ColumnDefinition[] = []
+  const multiResponseCols: ColumnDefinition[] = []
 
   for (const block of confirmedBlocks) {
     if (block.role !== 'analyze') continue
@@ -55,6 +56,7 @@ export function generateSuggestedQuestions(
       else if (col.format === 'category' || col.format === 'radio') categoryCols.push(col)
       else if (col.format === 'rating' || col.format === 'matrix') ratingCols.push(col)
       else if (col.format === 'timestamped') timestampCols.push(col)
+      else if (col.format === 'multi_response' || col.format === 'checkbox') multiResponseCols.push(col)
     }
   }
 
@@ -141,6 +143,38 @@ export function generateSuggestedQuestions(
       analysisDescription: `Shows ${topBehavioral.name} trend by time period`,
       pluginId: 'trend_over_time',
       columnIds: [tsCcol.id, topBehavioral.id],
+    })
+  }
+
+  // Rule 6 — Multi-response / checkbox grid
+  if (multiResponseCols.length > 0 && questions.length < MAX_QUESTIONS) {
+    const firstMR = multiResponseCols[0]
+    questions.push({
+      question: 'Which options are most selected overall?',
+      analysisDescription: `Shows selection rate for each ${firstMR.name} option`,
+      pluginId: 'frequency',
+      columnIds: multiResponseCols.map((c) => c.id),
+    })
+  }
+
+  if (multiResponseCols.length > 0 && categoryCols.length > 0 && questions.length < MAX_QUESTIONS) {
+    const firstMR = multiResponseCols[0]
+    const catCol = categoryCols[0]
+    questions.push({
+      question: `Do selection patterns differ by ${catCol.name}?`,
+      analysisDescription: `Compares ${firstMR.name} selection rates across ${catCol.name} groups`,
+      pluginId: 'crosstab',
+      columnIds: multiResponseCols.map((c) => c.id),
+      segmentColumnId: catCol.id,
+    })
+  }
+
+  if (multiResponseCols.length >= 3 && questions.length < MAX_QUESTIONS) {
+    questions.push({
+      question: 'Which options are selected together most often?',
+      analysisDescription: `Finds co-selection patterns across ${multiResponseCols.length} options`,
+      pluginId: 'correlation',
+      columnIds: multiResponseCols.map((c) => c.id),
     })
   }
 
