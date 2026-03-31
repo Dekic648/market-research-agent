@@ -194,7 +194,7 @@ export function DataWorkspace() {
             const block = blockMap.get(ref.questionBlockId)
             const col = block?.columns.find((c) => c.id === ref.columnId)
             if (!col) return null
-            return { id: col.id, name: col.name, values: resolveColumn(col), nullMeaning: col.nullMeaning }
+            return { id: col.id, name: col.name, values: resolveColumn(col), nullMeaning: col.nullMeaning, format: col.format, statisticalType: col.statisticalType }
           })
           .filter((c): c is NonNullable<typeof c> => c !== null)
 
@@ -203,7 +203,7 @@ export function DataWorkspace() {
           const block = blockMap.get(task.inputs.outcome.questionBlockId)
           const col = block?.columns.find((c) => c.id === task.inputs.outcome!.columnId)
           if (col) {
-            resolvedColumns.unshift({ id: col.id, name: col.name, values: resolveColumn(col), nullMeaning: col.nullMeaning })
+            resolvedColumns.unshift({ id: col.id, name: col.name, values: resolveColumn(col), nullMeaning: col.nullMeaning, format: col.format, statisticalType: col.statisticalType })
           }
         }
 

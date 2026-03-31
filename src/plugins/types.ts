@@ -34,6 +34,10 @@ export interface ResolvedColumn {
   name: string
   values: (number | string | null)[]
   nullMeaning?: NullMeaning
+  /** Original column format — for format-aware chart selection */
+  format?: import('../types/dataTypes').QuestionFormat
+  /** Statistical type — for ordinal vs categorical distinction */
+  statisticalType?: import('../types/dataTypes').StatisticalType
 }
 
 export interface ResolvedColumnData {

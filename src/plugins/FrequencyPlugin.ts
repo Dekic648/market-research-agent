@@ -623,28 +623,46 @@ const FrequencyPlugin: AnalysisPlugin = {
     const charts: ChartConfig[] = []
     const tables: ResultTable[] = []
 
-    // Segment × question: always produce a grouped bar chart + % table when segment is present
+    // Format-aware pre-routing
+    const colFormat = data.columns[0]?.format
+    const colStatType = data.columns[0]?.statisticalType
+    const isMatrix = colFormat === 'matrix'
+    const isBinary = colFormat === 'checkbox' || colFormat === 'multi_response'
+    const isDivergingCandidate = colFormat === 'rating'
+      || (colFormat === 'radio' && colStatType === 'ordinal')
+      || (!colFormat && frequencies.length >= 2) // fallback when format not available
+
     const hasSegment = !!data.segment
 
     if (hasSegment && data.segment) {
-      // Grouped bar chart + % table per column
+      // Segment present → grouped bar by segment for all formats
       for (const col of data.columns) {
         charts.push(buildGroupedBarBySegment(col, data.segment, col.name))
         tables.push(buildSegmentTable(col, data.segment))
       }
-    } else if (frequencies.length >= 2) {
-      // Matrix/grid: 2+ columns → always one combined chart, never individual bars
-      // Try diverging stacked bar first (best for Likert with 3+ numeric scale points)
+    } else if (isBinary) {
+      // Binary columns (checkbox/multi_response): straight % bar, never diverging
+      for (const freq of frequencies) {
+        charts.push(buildHorizontalBarChart(freq))
+      }
+    } else if (isMatrix && frequencies.length >= 2) {
+      // Matrix grid: diverging stacked bar (if numeric 3+ scale points), else stacked horizontal
       const diverging = buildDivergingStackedBar(frequencies)
       if (diverging) {
         charts.push(diverging)
       } else {
-        // Fallback for checkbox grids, 2-point scales, or non-numeric:
-        // grouped horizontal bar with one bar group per item
+        charts.push(buildMatrixGroupedBar(frequencies))
+      }
+    } else if (isDivergingCandidate && frequencies.length >= 2) {
+      // Rating/ordinal radio with 2+ columns: try diverging, fallback to stacked
+      const diverging = buildDivergingStackedBar(frequencies)
+      if (diverging) {
+        charts.push(diverging)
+      } else {
         charts.push(buildMatrixGroupedBar(frequencies))
       }
     } else {
-      // Single column → individual horizontal bar
+      // Single column or categorical radio: individual horizontal bars
       for (const freq of frequencies) {
         charts.push(buildHorizontalBarChart(freq))
       }

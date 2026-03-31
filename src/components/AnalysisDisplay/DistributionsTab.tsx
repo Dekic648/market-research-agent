@@ -52,6 +52,7 @@ interface QuestionBlockData {
   n: number | null
   topBox: number | null
   isLikert: boolean
+  nFindings: number
 }
 
 /** Check if a finding's sourceQuestionLabel matches a block label */
@@ -99,7 +100,7 @@ export function DistributionsTab({ findings, taskStepResults, questionOrder }: D
 
       const stats = freqFindings[0] ? extractStats(freqFindings[0]) : { mean: null, n: null, topBox: null, isLikert: false }
 
-      result.push({ label, charts, tables, summaryText, ...stats })
+      result.push({ label, charts, tables, summaryText, ...stats, nFindings: freqFindings.length })
     }
 
     // Fallback: if ordered matching found nothing, group all frequency findings by sourceQuestionLabel
@@ -129,7 +130,7 @@ export function DistributionsTab({ findings, taskStepResults, questionOrder }: D
         }
         if (!summaryText && groupFindings[0]) summaryText = groupFindings[0].summaryLanguage || ''
         const stats = groupFindings[0] ? extractStats(groupFindings[0]) : { mean: null, n: null, topBox: null, isLikert: false }
-        result.push({ label: groupLabel, charts, tables, summaryText, ...stats })
+        result.push({ label: groupLabel, charts, tables, summaryText, ...stats, nFindings: groupFindings.length })
       }
     }
 
@@ -193,8 +194,8 @@ function DistributionBlock({ block }: { block: QuestionBlockData }) {
       </div>
 
       <div className="rqb-body">
-        {/* Top-2 Box callout */}
-        {block.isLikert && block.topBox !== null && (
+        {/* Top-2 Box callout — single rating/ordinal-radio only, not matrix or binary */}
+        {block.isLikert && block.topBox !== null && block.nFindings === 1 && (
           <div className="dist-topbox-callout">
             Top 2 Box: <strong>{block.topBox.toFixed(0)}%</strong>
           </div>
