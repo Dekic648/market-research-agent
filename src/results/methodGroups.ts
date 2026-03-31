@@ -53,6 +53,8 @@ export const METHOD_GROUPS: Record<string, string> = {
   moderation_analysis: 'advanced',
   power_analysis: 'advanced',
   efa: 'factor',
+  abtest: 'group_comparisons',
+  cluster_analysis: 'advanced',
 }
 
 /** Plugin ordering within a section — lower runs first, display first */
