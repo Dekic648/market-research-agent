@@ -342,6 +342,59 @@ function buildGroupedBarBySegment(
 }
 
 // ============================================================
+// Matrix grouped bar — fallback for multi-column blocks
+// ============================================================
+
+function buildMatrixGroupedBar(frequencies: ColumnFrequency[]): ChartConfig {
+  // All unique response values across all columns
+  const allValues = new Set<string | number>()
+  for (const freq of frequencies) {
+    for (const it of freq.items) allValues.add(it.value)
+  }
+  const sortedValues = Array.from(allValues).sort((a, b) => {
+    const na = typeof a === 'number' ? a : parseFloat(String(a))
+    const nb = typeof b === 'number' ? b : parseFloat(String(b))
+    if (!isNaN(na) && !isNaN(nb)) return na - nb
+    return String(a).localeCompare(String(b))
+  })
+
+  // One trace per response value, y-axis = item names
+  const traces = sortedValues.map((val, vi) => {
+    const pcts = frequencies.map((freq) => {
+      const item = freq.items.find((it) => it.value === val)
+      return item?.pct ?? 0
+    })
+    return {
+      name: String(val),
+      type: 'bar',
+      orientation: 'h',
+      y: frequencies.map((f) => truncateLabel(f.columnName, 50)),
+      x: pcts,
+      marker: { color: brandColors[vi % brandColors.length] },
+      text: pcts.map((p) => `${p.toFixed(1)}%`),
+      textposition: 'inside' as const,
+    }
+  })
+
+  return {
+    id: `frequency_matrix_grouped_${Date.now()}`,
+    type: 'horizontalBar',
+    data: traces,
+    layout: {
+      ...baseLayout,
+      barmode: 'stack',
+      title: { text: 'Distribution' },
+      xaxis: { title: { text: '%' }, range: [0, 100] },
+      yaxis: { automargin: true },
+      showlegend: true,
+    },
+    config: baseConfig,
+    stepId: 'frequency',
+    edits: {},
+  }
+}
+
+// ============================================================
 // Table builder — % by segment
 // ============================================================
 
@@ -579,23 +632,21 @@ const FrequencyPlugin: AnalysisPlugin = {
         charts.push(buildGroupedBarBySegment(col, data.segment, col.name))
         tables.push(buildSegmentTable(col, data.segment))
       }
-    } else {
-      // Diverging stacked bar if multiple ordinal columns (matrix/grid questions)
-      let hasDivergingChart = false
-      if (frequencies.length >= 2) {
-        const diverging = buildDivergingStackedBar(frequencies)
-        if (diverging) {
-          charts.push(diverging)
-          hasDivergingChart = true
-        }
+    } else if (frequencies.length >= 2) {
+      // Matrix/grid: 2+ columns → always one combined chart, never individual bars
+      // Try diverging stacked bar first (best for Likert with 3+ numeric scale points)
+      const diverging = buildDivergingStackedBar(frequencies)
+      if (diverging) {
+        charts.push(diverging)
+      } else {
+        // Fallback for checkbox grids, 2-point scales, or non-numeric:
+        // grouped horizontal bar with one bar group per item
+        charts.push(buildMatrixGroupedBar(frequencies))
       }
-
-      // Individual horizontal bars — only if no diverging chart was produced
-      // (matrix questions should show as one grouped chart, not separate bars)
-      if (!hasDivergingChart) {
-        for (const freq of frequencies) {
-          charts.push(buildHorizontalBarChart(freq))
-        }
+    } else {
+      // Single column → individual horizontal bar
+      for (const freq of frequencies) {
+        charts.push(buildHorizontalBarChart(freq))
       }
     }
 
