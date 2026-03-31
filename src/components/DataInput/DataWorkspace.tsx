@@ -243,13 +243,15 @@ export function DataWorkspace() {
           completedPlugins.push(task.pluginId)
           taskStepMap[task.id] = result
 
-          // Derive question label from source blocks (preferred) or task label
-          const blockLabels = task.sourceQuestionIds
-            .map((qid) => blockMap.get(qid)?.label)
-            .filter(Boolean)
-          const questionLabel = blockLabels.length > 0
-            ? blockLabels.join(' + ')
-            : task.label || ''
+          // Derive question label from source blocks — exclude segment/dimension blocks
+          const questionBlockLabels = task.sourceQuestionIds
+            .map((qid) => blockMap.get(qid))
+            .filter((block): block is import('../../types/dataTypes').QuestionBlock => {
+              if (!block) return false
+              return block.role !== 'segment' && block.role !== 'dimension'
+            })
+            .map((block) => block.label)
+          const questionLabel = questionBlockLabels[0] ?? task.label ?? ''
 
           for (const fi of result.findings) {
             const finding = {

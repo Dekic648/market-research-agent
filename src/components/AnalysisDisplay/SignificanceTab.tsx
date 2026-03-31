@@ -22,8 +22,7 @@ function labelMatches(finding: Finding, blockLabel: string): boolean {
   const sql = finding.sourceQuestionLabel
   if (!sql) return false
   if (sql === blockLabel) return true
-  if (sql.endsWith(': ' + blockLabel)) return true
-  if (sql.includes(blockLabel)) return true
+  if (sql.startsWith(blockLabel)) return true
   return false
 }
 
@@ -38,8 +37,7 @@ function extractPosthocPairs(findings: Finding[], label: string): string[] {
   const posthocFinding = findings.find((f) =>
     f.stepId === 'posthoc' && f.significant && (
       f.sourceQuestionLabel === label ||
-      (f.sourceQuestionLabel?.endsWith(': ' + label)) ||
-      (f.sourceQuestionLabel?.includes(label))
+      (f.sourceQuestionLabel?.startsWith(label))
     )
   )
   if (!posthocFinding) return []
@@ -69,15 +67,13 @@ export function SignificanceTab({ findings, taskStepResults, questionOrder, show
       result.push({ label, finding: sigFinding, posthocPairs })
     }
 
-    // Fallback: catch all significance findings not matched by questionOrder
-    const coveredLabels = new Set(result.map((b) => b.label))
+    // Warn about unmatched significance findings (development aid)
+    const matchedIds = new Set(result.map((b) => b.finding.id))
     for (const f of findings) {
       if (!SIG_STEP_IDS.has(f.stepId) || f.suppressed) continue
-      const label = f.sourceQuestionLabel ?? f.title
-      if (coveredLabels.has(label)) continue
-      coveredLabels.add(label)
-      const posthocPairs = extractPosthocPairs(findings, label)
-      result.push({ label, finding: f, posthocPairs })
+      if (!matchedIds.has(f.id)) {
+        console.warn(`[SignificanceTab] Unmatched finding: "${f.sourceQuestionLabel}" (id: ${f.id})`)
+      }
     }
 
     // Sort: significant first, then non-significant

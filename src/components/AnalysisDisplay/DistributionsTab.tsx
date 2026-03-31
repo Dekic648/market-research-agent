@@ -45,14 +45,12 @@ interface QuestionBlockData {
   n: number | null
 }
 
-/** Check if a finding's sourceQuestionLabel matches a block label.
- *  TaskProposer prefixes labels like "Frequency: BlockLabel", so we use endsWith. */
+/** Check if a finding's sourceQuestionLabel matches a block label */
 function labelMatches(finding: Finding, blockLabel: string): boolean {
   const sql = finding.sourceQuestionLabel
   if (!sql) return false
   if (sql === blockLabel) return true
-  if (sql.endsWith(': ' + blockLabel)) return true
-  if (sql.includes(blockLabel)) return true
+  if (sql.startsWith(blockLabel)) return true
   return false
 }
 

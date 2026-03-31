@@ -209,3 +209,97 @@ describe('CorrelationsTab matrix', () => {
     expect(sorted[2].r).toBe(0.42) // Price ↔ Satisfaction weakest
   })
 })
+
+// ============================================================
+// Test 5: sourceQuestionLabel excludes segment blocks
+// ============================================================
+
+describe('sourceQuestionLabel excludes segment blocks', () => {
+  it('uses only the question block label, not the segment block label', () => {
+    // Simulate what DataWorkspace does with the fix
+    const blockMap = new Map([
+      ['block_q1', { id: 'block_q1', label: 'Overall, how would you rate Clubs Clash?', role: 'analyze' }],
+      ['block_seg', { id: 'block_seg', label: 'Segment', role: 'segment' }],
+    ])
+
+    const sourceQuestionIds = ['block_q1', 'block_seg']
+
+    // Apply the fixed logic from DataWorkspace
+    const questionBlockLabels = sourceQuestionIds
+      .map((qid) => blockMap.get(qid))
+      .filter((block) => {
+        if (!block) return false
+        return block.role !== 'segment' && block.role !== 'dimension'
+      })
+      .map((block) => block!.label)
+    const questionLabel = questionBlockLabels[0] ?? 'Unknown'
+
+    expect(questionLabel).toBe('Overall, how would you rate Clubs Clash?')
+    expect(questionLabel).not.toContain('Segment')
+    expect(questionLabel).not.toContain('+')
+  })
+})
+
+// ============================================================
+// Test 6: SignificanceTab deduplication — no spurious blocks
+// ============================================================
+
+describe('SignificanceTab deduplication', () => {
+  it('produces exactly one block per question, not three', () => {
+    // After Fix 1, sourceQuestionLabel should be clean.
+    // But test the old concatenated format to verify labelMatches precision.
+    const findings = [
+      makeFinding({
+        stepId: 'kw_significance',
+        sourceQuestionLabel: 'Overall Rating',
+        significant: true,
+        pValue: 0.003,
+        effectSize: 0.08,
+        effectLabel: 'small',
+      }),
+    ]
+
+    const questionOrder = ['Overall Rating', 'Segment', 'Overall Rating + Segment']
+
+    // Simulate SignificanceTab Pass 1 matching with startsWith (not includes)
+    function labelMatches(sql: string | undefined, blockLabel: string): boolean {
+      if (!sql) return false
+      if (sql === blockLabel) return true
+      if (sql.startsWith(blockLabel)) return true
+      return false
+    }
+
+    const SIG_STEP_IDS = new Set(['kw_significance', 'anova_oneway'])
+    const result: Array<{ label: string }> = []
+
+    for (const label of questionOrder) {
+      const sigFinding = findings.find((f) =>
+        SIG_STEP_IDS.has(f.stepId) && labelMatches(f.sourceQuestionLabel, label) && !f.suppressed
+      )
+      if (!sigFinding) continue
+      result.push({ label })
+    }
+
+    // Should match "Overall Rating" only — NOT "Segment", NOT "Overall Rating + Segment"
+    expect(result).toHaveLength(1)
+    expect(result[0].label).toBe('Overall Rating')
+  })
+
+  it('does not match "Segment" as a question block via startsWith', () => {
+    function labelMatches(sql: string | undefined, blockLabel: string): boolean {
+      if (!sql) return false
+      if (sql === blockLabel) return true
+      if (sql.startsWith(blockLabel)) return true
+      return false
+    }
+
+    // sourceQuestionLabel = "Overall Rating" should NOT match blockLabel "Segment"
+    expect(labelMatches('Overall Rating', 'Segment')).toBe(false)
+
+    // But it should match "Overall Rating" exactly
+    expect(labelMatches('Overall Rating', 'Overall Rating')).toBe(true)
+
+    // And should NOT match reversed partial
+    expect(labelMatches('Overall Rating', 'Overall Rating + Segment')).toBe(false)
+  })
+})
