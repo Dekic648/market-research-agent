@@ -20,6 +20,7 @@ interface CorrelationPair {
   significant: boolean
   summaryLanguage: string
   redundancyFlag: boolean
+  method: 'pearson' | 'spearman' | 'kendall'
 }
 
 /** Parse correlation findings into structured pairs */
@@ -37,11 +38,13 @@ function extractPairs(findings: Finding[]): CorrelationPair[] {
           colB = match[2].trim()
         }
       }
-      // Parse redundancyFlag from detail JSON
+      // Parse redundancyFlag and method from detail JSON
       let redundancyFlag = false
+      let method: 'pearson' | 'spearman' | 'kendall' = 'pearson'
       try {
         const detail = JSON.parse(f.detail)
         redundancyFlag = detail.redundancyFlag === true
+        if (detail.method === 'kendall' || detail.method === 'spearman') method = detail.method
       } catch { /* ignore */ }
 
       return {
@@ -51,6 +54,7 @@ function extractPairs(findings: Finding[]): CorrelationPair[] {
         significant: f.significant,
         summaryLanguage: f.summaryLanguage,
         redundancyFlag,
+        method,
       }
     })
     .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
@@ -206,6 +210,9 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
               ))}
             </tbody>
           </table>
+          <div className="corr-matrix-legend">
+            Pearson r used for continuous pairs · Kendall τ for ordinal pairs
+          </div>
         </div>
       )}
 
@@ -225,7 +232,10 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
             key={`${pair.colA}_${pair.colB}_${i}`}
             className={`corr-pair ${pair.significant ? '' : 'corr-pair-ns'}`}
           >
-            <span className="corr-pair-label">{pair.colA} ↔ {pair.colB}</span>
+            <span className="corr-pair-label">
+              {pair.colA} ↔ {pair.colB}
+              <span className="corr-method-badge">{pair.method === 'kendall' ? 'Kendall' : pair.method === 'spearman' ? 'Spearman' : 'Pearson'}</span>
+            </span>
             {pair.redundancyFlag && (
               <span className="corr-redundancy-flag">&#9888; Near-duplicate columns</span>
             )}

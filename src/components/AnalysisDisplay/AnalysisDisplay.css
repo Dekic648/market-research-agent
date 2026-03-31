@@ -96,6 +96,12 @@
 .xtab-pct-toggle { display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 4px; }
 .xtab-pct-label { font-size: 0.75rem; color: var(--text-muted, #6b7280); text-align: right; margin-bottom: 8px; }
 
+.corr-method-badge {
+  display: inline-block; margin-left: 6px; padding: 0 6px;
+  border-radius: 9999px; background: #e5e7eb; color: #374151;
+  font-size: 0.65rem; font-weight: 600; vertical-align: middle;
+}
+.corr-matrix-legend { font-size: 0.75rem; color: var(--text-muted, #6b7280); margin-top: 6px; font-style: italic; }
 .corr-redundancy-flag {
   display: inline-block; padding: 1px 8px; border-radius: 9999px;
   background: #fef3c7; color: #92400e; font-size: 0.75rem; font-weight: 600;

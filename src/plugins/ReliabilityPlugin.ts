@@ -110,7 +110,7 @@ const ReliabilityPlugin: AnalysisPlugin = {
     const charts = [buildItemDiagnosticChart(result)]
 
     const blockLabel = data.columns.map((c) => c.name).join(', ')
-    const findings = [{
+    const findings: Array<Record<string, unknown>> = [{
       type: 'reliability',
       title: `Cronbach's α = ${ca.alpha.toFixed(3)} (${result.level})`,
       summary: `${ca.k} items, n = ${ca.n}. ${weakItems.length > 0 ? `Weak items (r < .3): ${weakItems.join(', ')}.` : 'All items adequate.'}`,
@@ -123,11 +123,53 @@ const ReliabilityPlugin: AnalysisPlugin = {
       theme: null,
     }]
 
+    // Cohen's Kappa — exactly 2 columns with identical value sets (inter-rater agreement)
+    if (data.columns.length === 2) {
+      const vals0 = new Set(data.columns[0].values.filter((v) => v !== null))
+      const vals1 = new Set(data.columns[1].values.filter((v) => v !== null))
+      const sameValueSet = vals0.size === vals1.size && [...vals0].every((v) => vals1.has(v))
+
+      if (sameValueSet && vals0.size >= 2) {
+        const rater1 = filteredItems[0]
+        const rater2 = filteredItems[1]
+        // @ts-ignore
+        const ck = StatsEngine.cohensKappa(rater1, rater2) as any
+
+        if (!ck.error) {
+          const kappa = ck.kappa ?? 0
+          const kappaLabel = kappa > 0.8 ? 'almost perfect'
+            : kappa > 0.6 ? 'substantial'
+            : kappa > 0.4 ? 'moderate'
+            : kappa > 0.2 ? 'fair'
+            : 'slight'
+
+          const interpretation = kappa > 0.8 ? 'The two measures classify respondents nearly identically.'
+            : kappa > 0.6 ? 'There is strong agreement between the two measures.'
+            : kappa > 0.4 ? 'Agreement is moderate — some disagreement exists.'
+            : kappa > 0.2 ? 'Agreement is only fair — substantial disagreement.'
+            : 'Agreement is slight — the two measures largely disagree.'
+
+          findings.push({
+            type: 'reliability_kappa',
+            title: `Inter-rater Agreement — ${columnNames[0]} vs ${columnNames[1]}`,
+            summary: `κ = ${kappa.toFixed(3)}, p = ${ck.p < 0.001 ? '<.001' : ck.p.toFixed(3)}. Observed agreement: ${(ck.observedAgreement * 100).toFixed(1)}%, expected by chance: ${(ck.expectedAgreement * 100).toFixed(1)}%.`,
+            summaryLanguage: `Agreement between ${columnNames[0]} and ${columnNames[1]} is ${kappaLabel} (κ = ${kappa.toFixed(2)}). ${interpretation}`,
+            detail: JSON.stringify({ kappa, p: ck.p, observedAgreement: ck.observedAgreement, expectedAgreement: ck.expectedAgreement, ci95: ck.ci95 }),
+            significant: ck.p < 0.05,
+            pValue: ck.p,
+            effectSize: kappa,
+            effectLabel: kappaLabel,
+            theme: null,
+          })
+        }
+      }
+    }
+
     return {
       pluginId: 'cronbach',
       data: { result },
       charts,
-      findings,
+      findings: findings as any,
       plainLanguage: this.plainLanguage({ pluginId: 'cronbach', data: { result }, charts: [], findings: [], plainLanguage: '', assumptions: [], logEntry: {} }),
       assumptions: [],
       logEntry: { type: 'analysis_run', payload: { pluginId: 'cronbach', alpha: ca.alpha, k: ca.k } },
