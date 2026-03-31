@@ -6,6 +6,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { truncateLabel } from '../../engine/chartDefaults'
 import type { Finding } from '../../types/dataTypes'
 
 interface CorrelationsTabProps {
@@ -244,8 +245,8 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
             key={`${pair.colA}_${pair.colB}_${i}`}
             className={`corr-pair ${pair.significant ? '' : 'corr-pair-ns'}`}
           >
-            <span className="corr-pair-label">
-              {pair.colA} ↔ {pair.colB}
+            <span className="corr-pair-label" title={`${pair.colA} ↔ ${pair.colB}`}>
+              {truncateLabel(pair.colA, 40)} ↔ {truncateLabel(pair.colB, 40)}
               <span className="corr-method-badge">{pair.method === 'kendall' ? 'Kendall' : pair.method === 'spearman' ? 'Spearman' : 'Pearson'}</span>
             </span>
             {pair.redundancyFlag && (

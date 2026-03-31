@@ -148,6 +148,8 @@ function buildGroupedBarChart(ct: CrosstabResult): ChartConfig {
     x: xFull.map((l) => truncateLabel(l, 40)),
     y: ct.table.map((row) => row[ci].colPct),
     marker: { color: brandColors[ci % brandColors.length] },
+    text: ct.table.map((row) => `${row[ci].colPct.toFixed(1)}%`),
+    textposition: 'outside',
   }))
 
   return {

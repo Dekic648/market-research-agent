@@ -203,7 +203,7 @@ function buildHorizontalBarChart(freq: ColumnFrequency): ChartConfig {
       ...baseLayout,
       title: { text: truncateLabel(freq.columnName, 70) },
       xaxis: { title: { text: '%' }, range: [0, 100] },
-      yaxis: { automargin: true },
+      yaxis: { automargin: true, type: 'category' },
     },
     config: baseConfig,
     stepId: 'frequency',
@@ -311,11 +311,14 @@ function buildGroupedBarBySegment(
   const traces = segLabels.map((seg, i) => {
     const valMap = segGroups.get(seg)!
     const total = segCounts.get(seg) ?? 1
+    const pcts = sortedValues.map((v) => ((valMap.get(v) ?? 0) / total) * 100)
     return {
       name: String(seg),
       type: 'bar',
       x: sortedValues.map(String),
-      y: sortedValues.map((v) => ((valMap.get(v) ?? 0) / total) * 100),
+      y: pcts,
+      text: pcts.map((p) => `${p.toFixed(1)}%`),
+      textposition: 'outside',
       marker: { color: brandColors[i % brandColors.length] },
     }
   })
@@ -577,15 +580,22 @@ const FrequencyPlugin: AnalysisPlugin = {
         tables.push(buildSegmentTable(col, data.segment))
       }
     } else {
-      // Default charts (no segment)
-      for (const freq of frequencies) {
-        charts.push(buildHorizontalBarChart(freq))
-      }
-
-      // Diverging stacked bar if multiple ordinal columns
+      // Diverging stacked bar if multiple ordinal columns (matrix/grid questions)
+      let hasDivergingChart = false
       if (frequencies.length >= 2) {
         const diverging = buildDivergingStackedBar(frequencies)
-        if (diverging) charts.unshift(diverging)
+        if (diverging) {
+          charts.push(diverging)
+          hasDivergingChart = true
+        }
+      }
+
+      // Individual horizontal bars — only if no diverging chart was produced
+      // (matrix questions should show as one grouped chart, not separate bars)
+      if (!hasDivergingChart) {
+        for (const freq of frequencies) {
+          charts.push(buildHorizontalBarChart(freq))
+        }
       }
     }
 
