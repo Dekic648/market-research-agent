@@ -7,6 +7,7 @@
 
 import { AnalysisRegistry } from './AnalysisRegistry'
 import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
+import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin,
   PluginStepResult,
@@ -244,16 +245,50 @@ const CrosstabPlugin: AnalysisPlugin = {
           index: c.index,
         }))
       )
-      const summaryLanguage = highIndex.length > 0
-        ? `${ct.columnName} distribution varies across ${ct.segmentName} groups — "${highIndex[0]?.row}" is over-represented in "${highIndex[0]?.col}" (index ${highIndex[0]?.index.toFixed(0)}).`
-        : `${ct.columnName} distribution is fairly even across ${ct.segmentName} groups.`
+
+      // Chi-square test of independence — skip if weighted (non-integer counts)
+      let chiResult: { chiSquare: number; p: number; cramersV: number; df: number; warning: string | null } | null = null
+      if (!hasWeights && ct.rowLabels.length >= 2 && ct.colLabels.length >= 2) {
+        const observed = ct.table.map((row) => row.map((cell) => cell.count))
+        try {
+          // @ts-ignore
+          const chi = StatsEngine.chiSquare(observed) as any
+          if (!chi.error) {
+            chiResult = {
+              chiSquare: chi.chiSquare,
+              p: chi.p,
+              cramersV: chi.cramersV,
+              df: chi.df,
+              warning: chi.warning,
+            }
+          }
+        } catch { /* ignore */ }
+      }
+
+      const isSig = chiResult !== null && chiResult.p < 0.05
+      const cramersLabel = chiResult
+        ? chiResult.cramersV > 0.5 ? 'large' : chiResult.cramersV > 0.3 ? 'medium' : chiResult.cramersV > 0.1 ? 'small' : 'negligible'
+        : null
+
+      let summaryLanguage: string
+      if (isSig && chiResult) {
+        summaryLanguage = `There is a significant association between ${ct.columnName} and ${ct.segmentName} (χ² = ${chiResult.chiSquare.toFixed(1)}, p ${chiResult.p < 0.001 ? '< .001' : '= ' + chiResult.p.toFixed(3)}, V = ${chiResult.cramersV.toFixed(2)}).`
+      } else if (highIndex.length > 0) {
+        summaryLanguage = `${ct.columnName} distribution varies across ${ct.segmentName} groups — "${highIndex[0]?.row}" is over-represented in "${highIndex[0]?.col}" (index ${highIndex[0]?.index.toFixed(0)}).`
+      } else {
+        summaryLanguage = `${ct.columnName} distribution is fairly even across ${ct.segmentName} groups.`
+      }
+
+      const chiSummary = chiResult
+        ? ` χ²(${chiResult.df}) = ${chiResult.chiSquare.toFixed(2)}, p = ${chiResult.p < 0.001 ? '<.001' : chiResult.p.toFixed(3)}, Cramér's V = ${chiResult.cramersV.toFixed(3)} (${cramersLabel}).${chiResult.warning ? ' ' + chiResult.warning : ''}`
+        : ''
 
       return {
         type: 'crosstab',
         title: `${ct.columnName} × ${ct.segmentName}`,
-        summary: highIndex.length > 0
+        summary: (highIndex.length > 0
           ? `${highIndex.length} cell(s) over-indexed (>130). Strongest: "${highIndex[0]?.row}" in "${highIndex[0]?.col}" (index ${highIndex[0]?.index.toFixed(0)}).`
-          : `No strong over-indexing detected across ${ct.colLabels.length} segments.`,
+          : `No strong over-indexing detected across ${ct.colLabels.length} segments.`) + chiSummary,
         summaryLanguage,
         detail: JSON.stringify({
           grandTotal: ct.grandTotal,
@@ -264,11 +299,12 @@ const CrosstabPlugin: AnalysisPlugin = {
           table: ct.table,
           rowTotals: ct.rowTotals,
           colTotals: ct.colTotals,
+          chiSquare: chiResult,
         }),
-        significant: false,
-        pValue: null,
-        effectSize: null,
-        effectLabel: null,
+        significant: isSig,
+        pValue: chiResult?.p ?? null,
+        effectSize: chiResult?.cramersV ?? null,
+        effectLabel: cramersLabel,
         theme: null,
       }
     })
