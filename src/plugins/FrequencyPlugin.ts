@@ -44,6 +44,7 @@ interface ColumnFrequency {
   bot2box: number
   mean: number | null
   median: number | null
+  sd: number | null
 }
 
 // ============================================================
@@ -140,14 +141,18 @@ function computeFrequency(
     }
   }
 
-  // Mean and median
+  // Mean, median, and standard deviation
   let mean: number | null = null
   let median: number | null = null
+  let sd: number | null = null
   if (nums.length > 0) {
     mean = nums.reduce((s, n) => s + n, 0) / nums.length
     const sorted = [...nums].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
     median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+    sd = nums.length > 1
+      ? Math.sqrt(nums.reduce((s, v) => s + (v - mean!) ** 2, 0) / (nums.length - 1))
+      : null
   }
 
   return {
@@ -165,6 +170,7 @@ function computeFrequency(
     bot2box: bottomBox,
     mean,
     median,
+    sd,
   }
 }
 
@@ -415,6 +421,62 @@ function buildSegmentTable(
 }
 
 // ============================================================
+// Matrix summary table builder
+// ============================================================
+
+function buildMatrixSummaryTable(
+  frequencies: ColumnFrequency[],
+): ResultTable | null {
+  if (frequencies.length < 2) return null
+
+  // Detect shared scale: all items must have the same set of numeric response values
+  const allValues = new Set<number>()
+  for (const freq of frequencies) {
+    for (const it of freq.items) {
+      const n = typeof it.value === 'number' ? it.value : parseFloat(String(it.value))
+      if (!isNaN(n)) allValues.add(n)
+    }
+  }
+  const scalePoints = Array.from(allValues).sort((a, b) => a - b)
+  if (scalePoints.length < 2) return null
+
+  // Columns: one per scale point (as %) + Mean
+  const columns: ResultTable['columns'] = [
+    { key: 'item', label: 'Item' },
+    ...scalePoints.map((sp) => ({
+      key: `scale_${sp}`,
+      label: String(sp),
+      numeric: true,
+    })),
+    { key: 'mean', label: 'Mean', numeric: true },
+  ]
+
+  // Rows: one per statement (frequency)
+  const rows: ResultTable['rows'] = frequencies.map((freq) => {
+    const row: Record<string, string | number | null> = { item: freq.columnName }
+
+    for (const sp of scalePoints) {
+      const item = freq.items.find((it) => {
+        const v = typeof it.value === 'number' ? it.value : parseFloat(String(it.value))
+        return v === sp
+      })
+      const pct = item?.pct ?? 0
+      row[`scale_${sp}`] = `${pct.toFixed(1)}%`
+    }
+
+    row.mean = freq.mean !== null ? Math.round(freq.mean * 100) / 100 : null
+    return row
+  })
+
+  return {
+    id: `matrix_summary_${Date.now()}`,
+    title: 'Matrix Summary — % by response option',
+    columns,
+    rows,
+  }
+}
+
+// ============================================================
 // Plugin definition
 // ============================================================
 
@@ -465,17 +527,40 @@ const FrequencyPlugin: AnalysisPlugin = {
       }
     }
 
+    // Matrix summary table: when 2+ columns share a scale (no segment)
+    if (!hasSegment && frequencies.length >= 2) {
+      const matrixTable = buildMatrixSummaryTable(frequencies)
+      if (matrixTable) tables.push(matrixTable)
+    }
+
     // Generate findings
-    const findings = frequencies.map((freq) => {
+    const findings = frequencies.map((freq, idx) => {
+      const colNullMeaning = data.columns[idx]?.nullMeaning ?? 'missing'
+
       let summary: string
       if (freq.mean !== null && freq.topBox > 0) {
         const topNote = freq.topBox > 70 ? ' Strong positive rating.'
           : freq.topBox < 40 ? ' Below average — majority are not rating positively.'
           : ''
         const netNote = freq.netScore < 0 ? ' More negative than positive ratings overall.' : ''
-        summary = `${freq.topBox.toFixed(0)}% rate ${freq.columnName} positively (${freq.topBoxLabel}). Net score: ${freq.netScore > 0 ? '+' : ''}${freq.netScore.toFixed(0)}pp.${topNote}${netNote} Mean = ${freq.mean.toFixed(2)}, n = ${freq.n}.`
+        const sdStr = freq.sd !== null ? `, SD = ${freq.sd.toFixed(2)}` : ''
+        summary = `${freq.topBox.toFixed(0)}% rate ${freq.columnName} positively (${freq.topBoxLabel}). Net score: ${freq.netScore > 0 ? '+' : ''}${freq.netScore.toFixed(0)}pp.${topNote}${netNote} Mean = ${freq.mean.toFixed(2)}${sdStr}, n = ${freq.n}.`
       } else {
         summary = `${freq.n} responses across ${freq.items.length} categories. Mode: "${freq.items[0]?.value}" (${freq.items[0]?.pct.toFixed(1)}%).`
+      }
+
+      // Mention % for checkbox/multi-select columns (nullMeaning === 'not_chosen')
+      if (colNullMeaning === 'not_chosen' && freq.items.length > 0) {
+        const totalMentions = freq.items.reduce((s, it) => s + it.count, 0)
+        if (totalMentions > 0) {
+          const mentionLines = freq.items
+            .filter((it) => it.count > 0)
+            .map((it) => {
+              const mentionPct = (it.count / totalMentions) * 100
+              return `"${it.value}": ${it.pct.toFixed(1)}% of respondents, ${mentionPct.toFixed(1)}% of mentions`
+            })
+          summary += ` Mention breakdown: ${mentionLines.join('; ')}.`
+        }
       }
 
       const strengthLabel = freq.topBox > 70 ? 'strong' : freq.topBox < 40 ? 'weak' : 'moderate'
@@ -488,7 +573,7 @@ const FrequencyPlugin: AnalysisPlugin = {
         title: `${freq.columnName} Distribution`,
         summary,
         summaryLanguage,
-        detail: JSON.stringify(freq.items),
+        detail: JSON.stringify({ items: freq.items, mean: freq.mean, median: freq.median, sd: freq.sd, n: freq.n, topBox: freq.topBox, bottomBox: freq.bottomBox }),
         significant: false,
         pValue: null,
         effectSize: null,
