@@ -623,48 +623,34 @@ const FrequencyPlugin: AnalysisPlugin = {
     const charts: ChartConfig[] = []
     const tables: ResultTable[] = []
 
-    // Format-aware pre-routing
     const colFormat = data.columns[0]?.format
     const colStatType = data.columns[0]?.statisticalType
-    const isMatrix = colFormat === 'matrix'
-    const isBinary = colFormat === 'checkbox' || colFormat === 'multi_response'
-    const isDivergingCandidate = colFormat === 'rating'
-      || (colFormat === 'radio' && colStatType === 'ordinal')
-      || (!colFormat && frequencies.length >= 2) // fallback when format not available
-
     const hasSegment = !!data.segment
 
+    // Step 1: ALWAYS produce horizontal bar (options in %) per column — this is the base chart
+    for (const freq of frequencies) {
+      charts.push(buildHorizontalBarChart(freq))
+    }
+
+    // Step 2: For matrix/rating blocks with 2+ items, add a combined diverging stacked bar
+    const isOrdinalMultiCol = frequencies.length >= 2 && (
+      colFormat === 'matrix'
+      || colFormat === 'rating'
+      || (colFormat === 'radio' && colStatType === 'ordinal')
+      || !colFormat // fallback when format not available (e.g. untagged numeric data)
+    )
+    if (isOrdinalMultiCol) {
+      const diverging = buildDivergingStackedBar(frequencies)
+      if (diverging) {
+        charts.push(diverging)
+      }
+    }
+
+    // Step 3: If segment present, add grouped bar + table per column
     if (hasSegment && data.segment) {
-      // Segment present → grouped bar by segment for all formats
       for (const col of data.columns) {
         charts.push(buildGroupedBarBySegment(col, data.segment, col.name))
         tables.push(buildSegmentTable(col, data.segment))
-      }
-    } else if (isBinary) {
-      // Binary columns (checkbox/multi_response): straight % bar, never diverging
-      for (const freq of frequencies) {
-        charts.push(buildHorizontalBarChart(freq))
-      }
-    } else if (isMatrix && frequencies.length >= 2) {
-      // Matrix grid: diverging stacked bar (if numeric 3+ scale points), else stacked horizontal
-      const diverging = buildDivergingStackedBar(frequencies)
-      if (diverging) {
-        charts.push(diverging)
-      } else {
-        charts.push(buildMatrixGroupedBar(frequencies))
-      }
-    } else if (isDivergingCandidate && frequencies.length >= 2) {
-      // Rating/ordinal radio with 2+ columns: try diverging, fallback to stacked
-      const diverging = buildDivergingStackedBar(frequencies)
-      if (diverging) {
-        charts.push(diverging)
-      } else {
-        charts.push(buildMatrixGroupedBar(frequencies))
-      }
-    } else {
-      // Single column or categorical radio: individual horizontal bars
-      for (const freq of frequencies) {
-        charts.push(buildHorizontalBarChart(freq))
       }
     }
 

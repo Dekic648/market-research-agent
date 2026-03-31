@@ -248,7 +248,7 @@ describe('FrequencyPlugin', () => {
     expect(freq.nMissing).toBe(2)
   })
 
-  it('produces diverging chart for multiple ordinal columns', async () => {
+  it('produces horizontal bars first, then diverging chart for multiple ordinal columns', async () => {
     const data: ResolvedColumnData = {
       columns: [
         { id: 'q1', name: 'Satisfaction', values: [1, 2, 3, 4, 5, 3, 4, 5, 4, 5] },
@@ -260,6 +260,11 @@ describe('FrequencyPlugin', () => {
     const plugin = AnalysisRegistry.get('frequency')!
     const result = await plugin.run(data)
 
+    // Horizontal bars always come first — one per column
+    expect(result.charts[0].type).toBe('horizontalBar')
+    expect(result.charts[1].type).toBe('horizontalBar')
+
+    // Diverging stacked bar is additional (not replacement)
     const diverging = result.charts.find((c) => c.type === 'divergingStackedBar')
     expect(diverging).toBeDefined()
   })

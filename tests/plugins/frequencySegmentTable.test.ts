@@ -105,9 +105,11 @@ describe('FrequencyPlugin segment table', () => {
 
     const result = await FrequencyPlugin.run(data)
 
-    // Both chart and table must be present
-    expect(result.charts.length).toBeGreaterThanOrEqual(1)
-    expect(result.charts[0].type).toBe('groupedBar')
+    // Horizontal bar comes first, then grouped bar for segment
+    expect(result.charts.length).toBeGreaterThanOrEqual(2)
+    expect(result.charts[0].type).toBe('horizontalBar')
+    const groupedBar = result.charts.find((c) => c.type === 'groupedBar')
+    expect(groupedBar).toBeDefined()
     expect(result.tables).toBeDefined()
     expect(result.tables!.length).toBe(1)
   })

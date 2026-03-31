@@ -33,10 +33,10 @@ export function isAlchemerCheckboxColumn(
   const nullCount = values.filter((v) => v === null).length
   const nullRatio = values.length > 0 ? nullCount / values.length : 0
 
-  // Must have > 40% nulls — most respondents don't pick every option
+  // Must have > 10% nulls — most respondents don't pick every option
   if (nullRatio < 0.1) return false
 
-  // All non-null values must be numeric integers
+  // All non-null values must be numeric integers (Alchemer uses codes: 1, 2, 4, 6, 7, 9 etc)
   const nonNull: number[] = []
   for (const v of values) {
     if (v === null) continue
