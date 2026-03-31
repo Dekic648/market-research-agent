@@ -7,6 +7,7 @@
 
 import { AnalysisRegistry } from './AnalysisRegistry'
 import { baseConfig, baseLayout, brandColors, truncateLabel } from '../engine/chartDefaults'
+import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin,
   PluginStepResult,
@@ -497,10 +498,71 @@ const FrequencyPlugin: AnalysisPlugin = {
     },
   } satisfies OutputContract,
 
-  async run(data: ResolvedColumnData): Promise<PluginStepResult> {
+  async run(data: ResolvedColumnData, weights?: number[]): Promise<PluginStepResult> {
+    const w = weights ?? data.weights
+    const hasWeights = w != null && w.length === data.n
+    // @ts-ignore
+    const weightValidation = hasWeights ? StatsEngine.validateWeights(w!) as { valid: boolean; warning: string | null } : null
+    const useWeights = hasWeights && (weightValidation?.valid ?? false)
+
     const frequencies = data.columns.map((col) =>
       computeFrequency(col, col.nullMeaning ?? 'missing', data.rowCount, (col as any).declaredScaleRange)
     )
+
+    // Apply weights to frequencies if valid
+    if (useWeights) {
+      for (let ci = 0; ci < data.columns.length; ci++) {
+        const col = data.columns[ci]
+        const freq = frequencies[ci]
+
+        // Weighted frequency counts
+        // @ts-ignore
+        const wf = StatsEngine.weightedFrequency(
+          col.values.filter((v) => v !== null) as (number | string)[],
+          col.values.map((v, i) => v !== null ? w![i] : 0).filter((_, i) => col.values[i] !== null)
+        ) as Map<string, { count: number; weightedCount: number; pct: number }>
+
+        // Update items with weighted pct
+        for (const item of freq.items) {
+          const wEntry = wf.get(String(item.value))
+          if (wEntry) {
+            item.pct = wEntry.pct
+          }
+        }
+
+        // Weighted mean and sd
+        const nums: number[] = []
+        const numWeights: number[] = []
+        for (let i = 0; i < col.values.length; i++) {
+          const v = col.values[i]
+          if (v === null) continue
+          const n = typeof v === 'number' ? v : parseFloat(String(v))
+          if (isNaN(n)) continue
+          nums.push(n)
+          numWeights.push(w![i])
+        }
+
+        if (nums.length > 0) {
+          // @ts-ignore
+          const wd = StatsEngine.weightedDescribe(nums, numWeights) as { mean: number; sd: number; effectiveN: number }
+          freq.mean = wd.mean
+          freq.sd = wd.sd
+
+          // Recompute Top-2 Box with weighted counts
+          const sortedItems = [...freq.items].filter((it) => !isNaN(Number(it.value)))
+          if (sortedItems.length >= 2) {
+            const scaleMax = Number(sortedItems[sortedItems.length - 1].value)
+            const scaleMin = Number(sortedItems[0].value)
+            const scalePoints = scaleMax - scaleMin + 1
+            const topThreshold = scalePoints <= 3 ? scaleMax : scaleMax - 1
+            const botThreshold = scalePoints <= 3 ? scaleMin : scaleMin + 1
+            freq.topBox = sortedItems.filter((it) => Number(it.value) >= topThreshold).reduce((s, it) => s + it.pct, 0)
+            freq.bottomBox = sortedItems.filter((it) => Number(it.value) <= botThreshold).reduce((s, it) => s + it.pct, 0)
+            freq.netScore = freq.topBox - freq.bottomBox
+          }
+        }
+      }
+    }
 
     const charts: ChartConfig[] = []
     const tables: ResultTable[] = []
@@ -564,17 +626,21 @@ const FrequencyPlugin: AnalysisPlugin = {
       }
 
       const strengthLabel = freq.topBox > 70 ? 'strong' : freq.topBox < 40 ? 'weak' : 'moderate'
+      const weightSuffix = useWeights ? ' (weighted)' : ''
       const summaryLanguage = freq.mean !== null && freq.topBox > 0
-        ? `${freq.columnName} scores ${freq.topBox.toFixed(0)}% positive — ${strengthLabel}.`
-        : `${freq.columnName} has ${freq.items.length} response categories, with "${freq.items[0]?.value}" chosen most often (${freq.items[0]?.pct.toFixed(0)}%).`
+        ? `${freq.columnName} scores ${freq.topBox.toFixed(0)}% positive — ${strengthLabel}.${weightSuffix}`
+        : `${freq.columnName} has ${freq.items.length} response categories, with "${freq.items[0]?.value}" chosen most often (${freq.items[0]?.pct.toFixed(0)}%).${weightSuffix}`
+
+      const invalidWeightReason = hasWeights && !useWeights ? 'invalid_weights' : undefined
 
       return {
         type: 'frequency',
         title: `${freq.columnName} Distribution`,
         summary,
         summaryLanguage,
-        detail: JSON.stringify({ items: freq.items, mean: freq.mean, median: freq.median, sd: freq.sd, n: freq.n, topBox: freq.topBox, bottomBox: freq.bottomBox }),
+        detail: JSON.stringify({ items: freq.items, mean: freq.mean, median: freq.median, sd: freq.sd, n: freq.n, topBox: freq.topBox, bottomBox: freq.bottomBox, weighted: useWeights }),
         significant: false,
+        suppressionReason: invalidWeightReason,
         pValue: null,
         effectSize: null,
         effectLabel: null,

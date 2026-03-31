@@ -41,7 +41,8 @@ function computeCrosstab(
   colName: string,
   colId: string,
   segName: string,
-  nullMeaning: NullMeaning = 'missing'
+  nullMeaning: NullMeaning = 'missing',
+  weights?: number[]
 ): CrosstabResult {
   // Collect unique labels
   const rowSet = new Set<string | number>()
@@ -69,21 +70,20 @@ function computeCrosstab(
   let grandTotal = 0
 
   for (let i = 0; i < n; i++) {
+    const w = weights?.[i] ?? 1
     // For 'not_chosen': include rows where segment is present even if question is null
-    // (null question = "not selected" — counted in segment total)
     if (segValues[i] === null) continue
     if (colValues[i] === null) {
       if (nullMeaning === 'not_chosen') {
-        // Count toward segment total (grandTotal) but not toward any row label
-        grandTotal++
+        grandTotal += w
       }
       continue
     }
     const ri = rowLabels.indexOf(colValues[i] as string | number)
     const ci = colLabels.indexOf(segValues[i] as string | number)
     if (ri >= 0 && ci >= 0) {
-      counts[ri][ci]++
-      grandTotal++
+      counts[ri][ci] += w
+      grandTotal += w
     }
   }
 
@@ -218,11 +218,14 @@ const CrosstabPlugin: AnalysisPlugin = {
     fields: { crosstabs: 'CrosstabResult[]' },
   } satisfies OutputContract,
 
-  async run(data: ResolvedColumnData): Promise<PluginStepResult> {
+  async run(data: ResolvedColumnData, weights?: number[]): Promise<PluginStepResult> {
     if (!data.segment) throw new Error('CrosstabPlugin requires a segment column')
 
+    const w = weights ?? data.weights
+    const hasWeights = w != null && w.length === data.n
+
     const crosstabs = data.columns.map((col) =>
-      computeCrosstab(col.values, data.segment!.values, col.name, col.id, data.segment!.name, col.nullMeaning ?? 'missing')
+      computeCrosstab(col.values, data.segment!.values, col.name, col.id, data.segment!.name, col.nullMeaning ?? 'missing', hasWeights ? w : undefined)
     )
 
     const charts: ChartConfig[] = []
