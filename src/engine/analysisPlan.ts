@@ -35,7 +35,7 @@ function pluginExists(id: string): boolean {
   return AnalysisRegistry.get(id) !== undefined
 }
 
-const OUTCOME_KEYWORDS = [
+export const OUTCOME_KEYWORDS = [
   'satisfaction', 'overall', 'recommend', 'nps', 'rating', 'score',
   'revenue', 'spend', 'ltv', 'arpu', 'purchase', 'gross', 'payment',
 ]

@@ -19,6 +19,7 @@ interface CorrelationPair {
   r: number
   significant: boolean
   summaryLanguage: string
+  redundancyFlag: boolean
 }
 
 /** Parse correlation findings into structured pairs */
@@ -36,12 +37,20 @@ function extractPairs(findings: Finding[]): CorrelationPair[] {
           colB = match[2].trim()
         }
       }
+      // Parse redundancyFlag from detail JSON
+      let redundancyFlag = false
+      try {
+        const detail = JSON.parse(f.detail)
+        redundancyFlag = detail.redundancyFlag === true
+      } catch { /* ignore */ }
+
       return {
         colA,
         colB,
         r: f.effectSize ?? 0,
         significant: f.significant,
         summaryLanguage: f.summaryLanguage,
+        redundancyFlag,
       }
     })
     .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
@@ -217,6 +226,9 @@ export function CorrelationsTab({ findings, showNonSig }: CorrelationsTabProps) 
             className={`corr-pair ${pair.significant ? '' : 'corr-pair-ns'}`}
           >
             <span className="corr-pair-label">{pair.colA} ↔ {pair.colB}</span>
+            {pair.redundancyFlag && (
+              <span className="corr-redundancy-flag">&#9888; Near-duplicate columns</span>
+            )}
             <span className="corr-pair-summary">{pair.summaryLanguage}</span>
           </div>
         ))}

@@ -7,6 +7,7 @@
 
 import { AnalysisRegistry } from './AnalysisRegistry'
 import { baseConfig, baseLayout, truncateLabels } from '../engine/chartDefaults'
+import { OUTCOME_KEYWORDS } from '../engine/analysisPlan'
 import * as StatsEngine from '../engine/stats-engine'
 import type {
   AnalysisPlugin, PluginStepResult, ResolvedColumnData, OutputContract,
@@ -152,20 +153,43 @@ const CorrelationPlugin: AnalysisPlugin = {
     const charts = [buildCorrelationHeatmap(result)]
     const rLabel = correlationMethod === 'spearman' ? 'rho' : 'r'
 
+    // Detect outcome column for driver callout
+    const outcomeCol = data.columns.find((col) => {
+      const lower = col.name.toLowerCase()
+      return OUTCOME_KEYWORDS.some((kw) => lower.includes(kw))
+    })
+    const outcomeName = outcomeCol?.name ?? null
+
+    // Find the highest-|r| pair involving the outcome (for driver framing)
+    const outcomeTopPair = outcomeName
+      ? strongPairs.find((p) => p.a === outcomeName || p.b === outcomeName)
+      : null
+
     const findings = strongPairs.slice(0, 5).map((pair) => {
       const dir = pair.r > 0 ? 'higher' : 'lower'
-      const summaryLanguage = Math.abs(pair.r) > 0.7
-        ? `${pair.a} and ${pair.b} move together — higher ${pair.a} consistently accompanies ${dir} ${pair.b}.`
-        : Math.abs(pair.r) > 0.4
-        ? `${pair.a} and ${pair.b} are moderately related — ${dir} ${pair.a} tends to accompany ${dir} ${pair.b}.`
-        : `${pair.a} and ${pair.b} show a weak relationship.`
+
+      // Driver callout: reframe the top outcome pair asymmetrically
+      let summaryLanguage: string
+      if (outcomeTopPair && pair.a === outcomeTopPair.a && pair.b === outcomeTopPair.b) {
+        const predictor = pair.a === outcomeName ? pair.b : pair.a
+        summaryLanguage = `${predictor} is the strongest correlate of ${outcomeName} (r = ${pair.r.toFixed(2)}).`
+      } else if (Math.abs(pair.r) > 0.7) {
+        summaryLanguage = `${pair.a} and ${pair.b} move together — higher ${pair.a} consistently accompanies ${dir} ${pair.b}.`
+      } else if (Math.abs(pair.r) > 0.4) {
+        summaryLanguage = `${pair.a} and ${pair.b} are moderately related — ${dir} ${pair.a} tends to accompany ${dir} ${pair.b}.`
+      } else {
+        summaryLanguage = `${pair.a} and ${pair.b} show a weak relationship.`
+      }
+
+      // Redundancy flag for near-duplicate columns
+      const redundancyFlag = Math.abs(pair.r) > 0.8
 
       return {
         type: 'correlation',
         title: `${pair.a} ↔ ${pair.b}: ${rLabel} = ${pair.r.toFixed(3)}`,
-        summary: `${Math.abs(pair.r) > 0.7 ? 'Strong' : 'Moderate'} ${pair.r > 0 ? 'positive' : 'negative'} correlation (p ${pair.p < 0.001 ? '< .001' : '= ' + pair.p.toFixed(3)}).${correlationMethod === 'spearman' ? ' Spearman rank correlation used — appropriate for skewed or zero-inflated data.' : ''}`,
+        summary: `${Math.abs(pair.r) > 0.7 ? 'Strong' : 'Moderate'} ${pair.r > 0 ? 'positive' : 'negative'} correlation (p ${pair.p < 0.001 ? '< .001' : '= ' + pair.p.toFixed(3)}).${correlationMethod === 'spearman' ? ' Spearman rank correlation used — appropriate for skewed or zero-inflated data.' : ''}${redundancyFlag ? ' Warning: r > 0.8 — these columns may be measuring the same thing. Consider merging or dropping one.' : ''}`,
         summaryLanguage,
-        detail: JSON.stringify(pair),
+        detail: JSON.stringify({ ...pair, redundancyFlag }),
         significant: true,
         pValue: pair.p,
         effectSize: pair.r,
