@@ -71,20 +71,16 @@ export function isAlchemerCheckboxGrid(
 ): boolean {
   if (columns.length < 3) return false
 
-  // All columns must match the Alchemer pattern
+  // All columns must match the checkbox pattern individually
   const allMatch = columns.every((col) =>
     isAlchemerCheckboxColumn(col.values, col.fingerprint, col.name)
   )
   if (!allMatch) return false
 
-  // Column names should share a common prefix (Q12_, Feature_, etc.)
-  const names = columns.map((c) => c.name)
-  const prefix = commonPrefix(names)
-  if (prefix.length >= 2) return true
-
-  // Fallback: all names end with _N
-  const allSuffixed = names.every((n) => /[_]\d+$/.test(n))
-  return allSuffixed
+  // If ALL columns match the checkbox pattern, that's strong enough evidence
+  // even without a shared prefix. The per-column check already validates
+  // high null rate + single code value per column.
+  return true
 }
 
 function commonPrefix(strings: string[]): string {
