@@ -94,21 +94,30 @@ function getSegmentColumns(blocks: QuestionBlock[]): ColumnWithBlock[] {
 function buildTier1(blocks: QuestionBlock[], analyzable: ColumnWithBlock[]): AnalysisTier {
   const tasks: AnalysisTask[] = []
 
-  // Survey ordinal columns → frequency
-  for (const { col, blockId } of analyzable) {
-    if (isSurveyFormat(col) && pluginExists('frequency')) {
-      tasks.push({
-        id: nextId('frequency'),
-        pluginId: 'frequency',
-        label: `Frequency: ${col.name}`,
-        inputs: { columns: [ref(blockId, col.id)] },
-        sourceQuestionIds: [blockId],
-        dependsOn: [],
-        proposedBy: 'system',
-        reason: `Survey question → frequency distribution`,
-        status: 'proposed',
-      })
+  // Survey ordinal columns → frequency (grouped by block for matrix questions)
+  const freqByBlock = new Map<string, ColumnWithBlock[]>()
+  for (const cwb of analyzable) {
+    if (isSurveyFormat(cwb.col) && pluginExists('frequency')) {
+      if (!freqByBlock.has(cwb.blockId)) freqByBlock.set(cwb.blockId, [])
+      freqByBlock.get(cwb.blockId)!.push(cwb)
     }
+  }
+
+  for (const [blockId, cols] of freqByBlock) {
+    const colRefs = cols.map(({ col }) => ref(blockId, col.id))
+    tasks.push({
+      id: nextId('frequency'),
+      pluginId: 'frequency',
+      label: cols.length === 1 ? `Frequency: ${cols[0].col.name}` : `Frequency: ${cols[0].blockLabel}`,
+      inputs: { columns: colRefs },
+      sourceQuestionIds: [blockId],
+      dependsOn: [],
+      proposedBy: 'system',
+      reason: cols.length === 1
+        ? `Survey question → frequency distribution`
+        : `${cols.length} items in matrix → grouped frequency distribution`,
+      status: 'proposed',
+    })
   }
 
   // Behavioral metric columns → descriptives
