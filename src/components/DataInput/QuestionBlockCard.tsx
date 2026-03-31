@@ -560,10 +560,12 @@ export function QuestionBlockCard({ block, index, onUpdate, onRemove, allConfirm
               <div className="qb-null-note">{nullSemanticNote}</div>
             )}
 
-            {/* Confirm / Change */}
-            {!block.confirmed && !showNominalWarning && (
+            {/* Confirm / Change — always visible when unconfirmed */}
+            {!block.confirmed && (
               <div className="qb-confirm-actions">
-                <button className="btn btn-primary" onClick={handleConfirmType}>Looks right</button>
+                {!showNominalWarning && (
+                  <button className="btn btn-primary" onClick={handleConfirmType}>Looks right</button>
+                )}
                 <button className="btn btn-secondary" onClick={() => setShowTypeSelector(!showTypeSelector)}>Change type</button>
               </div>
             )}
