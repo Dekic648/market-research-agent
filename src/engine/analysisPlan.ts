@@ -17,6 +17,7 @@ import type {
   ColumnRef, ColumnDefinition,
 } from '../types/dataTypes'
 import { AnalysisRegistry } from '../plugins/AnalysisRegistry'
+import { isOrdinalFormat } from './formatPredicates'
 
 // ============================================================
 // Helpers
@@ -139,8 +140,8 @@ function buildTier1(blocks: QuestionBlock[], analyzable: ColumnWithBlock[]): Ana
     }
   }
 
-  // Descriptives summary: 2+ ordinal columns
-  const ordinalCols = analyzable.filter(({ col }) => isSurveyFormat(col))
+  // Descriptives summary: 2+ ordinal columns (rating/matrix/radio-ordinal only — not checkbox/multi_response)
+  const ordinalCols = analyzable.filter(({ col }) => isOrdinalFormat(col))
   if (ordinalCols.length >= 2 && pluginExists('descriptives_summary')) {
     const allRefs = ordinalCols.map(({ col, blockId }) => ref(blockId, col.id))
     const sourceIds = [...new Set(ordinalCols.map(({ blockId }) => blockId))]
@@ -354,8 +355,8 @@ function buildTier3(analyzable: ColumnWithBlock[], blocks: QuestionBlock[]): Ana
 
   const tasks: AnalysisTask[] = []
 
-  // Correlation: 2+ analyzable columns
-  const ordinals = analyzable.filter(({ col }) => isSurveyFormat(col))
+  // Correlation: 2+ ordinal columns (strings from checkbox/multi_response would fail)
+  const ordinals = analyzable.filter(({ col }) => isOrdinalFormat(col))
   const behaviorals = analyzable.filter(({ col }) => isBehavioralMetric(col))
   let hasCrossType = false
 
@@ -412,9 +413,9 @@ function buildTier3(analyzable: ColumnWithBlock[], blocks: QuestionBlock[]): Ana
     hasCrossType = true
   }
 
-  // Cronbach alpha: 3+ ordinal from same block
+  // Cronbach alpha: 3+ Likert items from same block (rating/matrix only — not checkbox/radio/multi_response)
   for (const block of blocks) {
-    const ordinalInBlock = block.columns.filter((c) => isSurveyFormat(c))
+    const ordinalInBlock = block.columns.filter((c) => c.format === 'rating' || c.format === 'matrix')
     if (ordinalInBlock.length >= 3 && pluginExists('cronbach')) {
       tasks.push({
         id: nextId('cronbach'),
@@ -474,7 +475,7 @@ function buildTier4(analyzable: ColumnWithBlock[]): AnalysisTier {
   // Priority 2: single ordinal in block with 3+ other columns
   if (!detectedOutcome) {
     // Find single-column ordinal blocks when multi-column blocks exist
-    const singleOrdinals = analyzable.filter(({ col }) => isSurveyFormat(col))
+    const singleOrdinals = analyzable.filter(({ col }) => isOrdinalFormat(col))
     if (singleOrdinals.length === 1 && analyzable.length >= 4) {
       detectedOutcome = singleOrdinals[0]
     }
@@ -523,7 +524,7 @@ function buildTier4(analyzable: ColumnWithBlock[]): AnalysisTier {
   const outcomeRef = ref(outcome.blockId, outcome.col.id)
   const isBinaryOutcome = isBinaryCol(outcome.col)
   const isBehavioralOutcome = isBehavioralMetric(outcome.col)
-  const surveyPredictors = predictors.filter(({ col }) => isSurveyFormat(col))
+  const surveyPredictors = predictors.filter(({ col }) => isOrdinalFormat(col))
   const behavioralPredictors = predictors.filter(({ col }) => isBehavioralMetric(col))
 
   let hasCrossType = false
