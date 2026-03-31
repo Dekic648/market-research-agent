@@ -335,7 +335,9 @@ describe('SignificancePlugin', () => {
     const res = (result.data as any).results
     expect(res).toHaveLength(1)
     expect(res[0].p).toBeLessThan(0.05)
-    expect(res[0].epsilonSquared).toBeGreaterThan(0)
+    // 2-group case uses Welch's t-test → Cohen's d instead of ε²
+    expect(res[0].testUsed).toBe("Welch's t-test")
+    expect(Math.abs(res[0].cohensD)).toBeGreaterThan(0)
   })
 
   it('produces significance map chart', async () => {

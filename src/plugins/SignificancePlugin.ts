@@ -32,12 +32,24 @@ interface ColumnSignificance {
   groupMeans: number[]
   groupSDs: number[]
   groupNs: number[]
+  /** t-test fields (only when exactly 2 groups) */
+  cohensD?: number
+  ci95?: { lower: number; upper: number }
+  meanDiff?: number
 }
 
 function effectLabel(eps: number): string {
   if (eps < 0.01) return 'negligible'
   if (eps < 0.06) return 'small'
   if (eps < 0.14) return 'medium'
+  return 'large'
+}
+
+function cohensDLabel(d: number): string {
+  const abs = Math.abs(d)
+  if (abs < 0.2) return 'negligible'
+  if (abs < 0.5) return 'small'
+  if (abs < 0.8) return 'moderate'
   return 'large'
 }
 
@@ -67,9 +79,38 @@ function computeSignificance(
   // Check minimum group size
   if (groupArrays.some((g) => g.length < 2)) return null
 
-  // Run Kruskal-Wallis
+  const groupMeans = groupArrays.map((g) => g.reduce((s, v) => s + v, 0) / g.length)
+  const groupSDs = groupArrays.map((g) => {
+    const m = g.reduce((s, v) => s + v, 0) / g.length
+    return g.length > 1 ? Math.sqrt(g.reduce((s, v) => s + (v - m) ** 2, 0) / (g.length - 1)) : 0
+  })
+  const groupNs = groupArrays.map((g) => g.length)
+
+  // Exactly 2 groups → use Welch's t-test (more powerful, produces CI + Cohen's d)
+  if (groups.size === 2) {
+    // @ts-ignore
+    const tt = StatsEngine.ttest(groupArrays[0], groupArrays[1]) as any
+    return {
+      columnId: colId,
+      columnName: colName,
+      testUsed: "Welch's t-test",
+      H: 0, // not applicable for t-test
+      p: tt.p,
+      df: tt.df,
+      epsilonSquared: 0, // not applicable
+      effectLabel: cohensDLabel(tt.cohensD ?? 0),
+      nPerGroup: groupNs,
+      groupMeans,
+      groupSDs,
+      groupNs,
+      cohensD: tt.cohensD,
+      ci95: tt.ci95,
+      meanDiff: tt.meanDiff,
+    }
+  }
+
+  // 3+ groups → Kruskal-Wallis
   // @ts-ignore — stats engine is @ts-nocheck
-  // TODO: add weights support to kruskalWallis()
   const kw = StatsEngine.kruskalWallis(groupArrays)
 
   const N = groupArrays.reduce((s, g) => s + g.length, 0)
@@ -84,13 +125,10 @@ function computeSignificance(
     df: kw.df,
     epsilonSquared: Math.max(0, eps),
     effectLabel: effectLabel(Math.max(0, eps)),
-    nPerGroup: groupArrays.map((g) => g.length),
-    groupMeans: groupArrays.map((g) => g.reduce((s, v) => s + v, 0) / g.length),
-    groupSDs: groupArrays.map((g) => {
-      const m = g.reduce((s, v) => s + v, 0) / g.length
-      return g.length > 1 ? Math.sqrt(g.reduce((s, v) => s + (v - m) ** 2, 0) / (g.length - 1)) : 0
-    }),
-    groupNs: groupArrays.map((g) => g.length),
+    nPerGroup: groupNs,
+    groupMeans,
+    groupSDs,
+    groupNs,
   }
 }
 
@@ -208,25 +246,89 @@ const SignificancePlugin: AnalysisPlugin = {
       const highGroup = groupLabelsAll[maxMeanIdx] ?? 'highest group'
       const lowGroup = groupLabelsAll[minMeanIdx] ?? 'lowest group'
       const isSig = r.p < 0.05
+      const isTTest = r.testUsed === "Welch's t-test"
 
-      const summaryLanguage = isSig
-        ? `There IS a clear difference between ${data.segment!.name} segments on ${r.columnName} — ${highGroup} scores highest, ${lowGroup} lowest. ${r.p < 0.001 ? 'Extremely unlikely to be random chance.' : r.p < 0.01 ? 'Very unlikely to be random.' : 'Unlikely to be random.'}`
-        : `There is NO meaningful difference in ${r.columnName} across ${data.segment!.name} segments. The differences could easily be random.`
+      let summaryLanguage: string
+      let summary: string
 
-      // Enrich detail with groupLabels for downstream rendering
-      const detailWithLabels = { ...r, groupLabels: groupLabelsAll.map(String) }
+      if (isTTest) {
+        const ciStr = r.ci95 ? `, 95% CI [${r.ci95.lower.toFixed(2)}–${r.ci95.upper.toFixed(2)}]` : ''
+        summaryLanguage = isSig
+          ? `${highGroup} rates ${r.columnName} significantly higher than ${lowGroup} (mean ${r.groupMeans[maxMeanIdx].toFixed(2)} vs ${r.groupMeans[minMeanIdx].toFixed(2)}, d = ${(r.cohensD ?? 0).toFixed(2)}${ciStr}).`
+          : `There is NO meaningful difference in ${r.columnName} between ${highGroup} and ${lowGroup}.`
+        summary = `t(${r.df.toFixed(1)}) = ${(r.meanDiff ?? 0 / 1).toFixed(2)}, p = ${r.p < 0.001 ? '<.001' : r.p.toFixed(3)}. Cohen's d = ${(r.cohensD ?? 0).toFixed(3)} (${r.effectLabel})${ciStr}.`
+      } else {
+        summaryLanguage = isSig
+          ? `There IS a clear difference between ${data.segment!.name} segments on ${r.columnName} — ${highGroup} scores highest, ${lowGroup} lowest. ${r.p < 0.001 ? 'Extremely unlikely to be random chance.' : r.p < 0.01 ? 'Very unlikely to be random.' : 'Unlikely to be random.'}`
+          : `There is NO meaningful difference in ${r.columnName} across ${data.segment!.name} segments. The differences could easily be random.`
+        summary = `H(${r.df}) = ${r.H.toFixed(2)}, p = ${r.p < 0.001 ? '<.001' : r.p.toFixed(3)}. Effect: ε² = ${r.epsilonSquared.toFixed(3)} (${r.effectLabel}).`
+      }
+
+      // Relative likelihood: for significant Likert findings, compute T2B per segment
+      let relativeLikelihood: { multiplier: number; highPct: number; lowPct: number; highLabel: string; lowLabel: string } | null = null
+      if (isSig) {
+        const col = data.columns.find((c) => c.id === r.columnId)
+        if (col) {
+          // Check if column is ordinal/Likert (all numeric with reasonable range)
+          const numericVals = col.values.filter((v): v is number => typeof v === 'number' || (v !== null && !isNaN(Number(v))))
+          const uniqueVals = new Set(numericVals.map(Number))
+          const isLikert = uniqueVals.size >= 3 && uniqueVals.size <= 10
+
+          if (isLikert) {
+            const sortedScale = Array.from(uniqueVals).sort((a, b) => a - b)
+            const scaleMax = sortedScale[sortedScale.length - 1]
+            const topThreshold = sortedScale.length <= 3 ? scaleMax : scaleMax - 1
+
+            // Group by segment, compute T2B per group
+            const segGrouped = new Map<string | number, { top: number; total: number }>()
+            for (let i = 0; i < col.values.length; i++) {
+              const seg = data.segment!.values[i]
+              const val = col.values[i]
+              if (seg === null || val === null) continue
+              const numVal = typeof val === 'number' ? val : Number(val)
+              if (isNaN(numVal)) continue
+              if (!segGrouped.has(seg)) segGrouped.set(seg, { top: 0, total: 0 })
+              const g = segGrouped.get(seg)!
+              g.total++
+              if (numVal >= topThreshold) g.top++
+            }
+
+            const highSeg = segGrouped.get(groupLabelsAll[maxMeanIdx])
+            const lowSeg = segGrouped.get(groupLabelsAll[minMeanIdx])
+
+            if (highSeg && lowSeg && highSeg.total > 0 && lowSeg.total > 0) {
+              // @ts-ignore
+              const zpResult = StatsEngine.twoProportionZ(highSeg.top, highSeg.total, lowSeg.top, lowSeg.total) as any
+              if (zpResult.p < 0.05 && zpResult.p2 > 0) {
+                const mult = zpResult.p1 / zpResult.p2
+                relativeLikelihood = {
+                  multiplier: Math.round(mult * 10) / 10,
+                  highPct: Math.round(zpResult.p1 * 100),
+                  lowPct: Math.round(zpResult.p2 * 100),
+                  highLabel: String(highGroup),
+                  lowLabel: String(lowGroup),
+                }
+                summary += ` ${highGroup} is ${relativeLikelihood.multiplier.toFixed(1)}x more likely to rate positively than ${lowGroup} (${relativeLikelihood.highPct}% vs ${relativeLikelihood.lowPct}%).`
+              }
+            }
+          }
+        }
+      }
+
+      const detailWithLabels = { ...r, groupLabels: groupLabelsAll.map(String), relativeLikelihood }
+      const effectSizeVal = isTTest ? Math.abs(r.cohensD ?? 0) : r.epsilonSquared
 
       return {
         type: 'significance',
         title: isSig
           ? `${r.columnName} — significant difference across segments`
           : `${r.columnName} — no significant difference`,
-        summary: `H(${r.df}) = ${r.H.toFixed(2)}, p = ${r.p < 0.001 ? '<.001' : r.p.toFixed(3)}. Effect: ε² = ${r.epsilonSquared.toFixed(3)} (${r.effectLabel}).`,
+        summary,
         summaryLanguage,
         detail: JSON.stringify(detailWithLabels),
         significant: isSig,
         pValue: r.p,
-        effectSize: r.epsilonSquared,
+        effectSize: effectSizeVal,
         effectLabel: r.effectLabel,
         theme: null,
       }
