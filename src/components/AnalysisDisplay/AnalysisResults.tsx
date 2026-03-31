@@ -9,7 +9,7 @@
  *   V.   Multivariate — regression, drivers, EFA, reliability
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ResultsPageHeader } from './ResultsPageHeader'
 import { FlagsStrip } from './FlagsStrip'
 import { DistributionsTab } from './DistributionsTab'
