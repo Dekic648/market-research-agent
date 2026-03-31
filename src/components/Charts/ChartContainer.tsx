@@ -109,7 +109,8 @@ export function ChartContainer({ chart, height = 400 }: ChartContainerProps) {
     getPlotly().then((Plotly) => {
       if (cancelled || !divRef.current) return
       Plotly.newPlot(divRef.current, data as any, mergedLayout as any, mergedConfig as any)
-    })
+        .catch((err: unknown) => console.error('[ChartContainer] Plotly.newPlot failed:', err))
+    }).catch((err: unknown) => console.error('[ChartContainer] Plotly import failed:', err))
 
     return () => {
       cancelled = true
