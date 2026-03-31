@@ -200,36 +200,42 @@ const SignificancePlugin: AnalysisPlugin = {
       if (v !== null) segGroups.set(v, true)
     }
 
-    const findings = results
-      .filter((r) => r.p < 0.05)
-      .map((r) => {
-        const maxMeanIdx = r.groupMeans.indexOf(Math.max(...r.groupMeans))
-        const minMeanIdx = r.groupMeans.indexOf(Math.min(...r.groupMeans))
-        const groupLabels = Array.from(segGroups.keys()).sort((a, b) => String(a).localeCompare(String(b)))
-        const highGroup = groupLabels[maxMeanIdx] ?? 'highest group'
-        const lowGroup = groupLabels[minMeanIdx] ?? 'lowest group'
-        const confidenceLevel = r.p < 0.001 ? 'Extremely unlikely to be random chance.' : r.p < 0.01 ? 'Very unlikely to be random.' : 'Unlikely to be random.'
-        const summaryLanguage = `There IS a clear difference between ${data.segment!.name} segments on ${r.columnName} — ${highGroup} scores highest, ${lowGroup} lowest. ${confidenceLevel}`
+    const groupLabelsAll = Array.from(segGroups.keys()).sort((a, b) => String(a).localeCompare(String(b)))
 
-        return {
-          type: 'significance',
-          title: `${r.columnName} — significant difference across segments`,
-          summary: `H(${r.df}) = ${r.H.toFixed(2)}, p = ${r.p < 0.001 ? '<.001' : r.p.toFixed(3)}. Effect: ε² = ${r.epsilonSquared.toFixed(3)} (${r.effectLabel}).`,
-          summaryLanguage,
-          detail: JSON.stringify(r),
-          significant: true,
-          pValue: r.p,
-          effectSize: r.epsilonSquared,
-          effectLabel: r.effectLabel,
-          theme: null,
-        }
-      })
+    const findings = results.map((r) => {
+      const maxMeanIdx = r.groupMeans.indexOf(Math.max(...r.groupMeans))
+      const minMeanIdx = r.groupMeans.indexOf(Math.min(...r.groupMeans))
+      const highGroup = groupLabelsAll[maxMeanIdx] ?? 'highest group'
+      const lowGroup = groupLabelsAll[minMeanIdx] ?? 'lowest group'
+      const isSig = r.p < 0.05
+
+      const summaryLanguage = isSig
+        ? `There IS a clear difference between ${data.segment!.name} segments on ${r.columnName} — ${highGroup} scores highest, ${lowGroup} lowest. ${r.p < 0.001 ? 'Extremely unlikely to be random chance.' : r.p < 0.01 ? 'Very unlikely to be random.' : 'Unlikely to be random.'}`
+        : `There is NO meaningful difference in ${r.columnName} across ${data.segment!.name} segments. The differences could easily be random.`
+
+      // Enrich detail with groupLabels for downstream rendering
+      const detailWithLabels = { ...r, groupLabels: groupLabelsAll.map(String) }
+
+      return {
+        type: 'significance',
+        title: isSig
+          ? `${r.columnName} — significant difference across segments`
+          : `${r.columnName} — no significant difference`,
+        summary: `H(${r.df}) = ${r.H.toFixed(2)}, p = ${r.p < 0.001 ? '<.001' : r.p.toFixed(3)}. Effect: ε² = ${r.epsilonSquared.toFixed(3)} (${r.effectLabel}).`,
+        summaryLanguage,
+        detail: JSON.stringify(detailWithLabels),
+        significant: isSig,
+        pValue: r.p,
+        effectSize: r.epsilonSquared,
+        effectLabel: r.effectLabel,
+        theme: null,
+      }
+    })
 
     // Check preconditions
     const assumptions = this.preconditions.map((v) => v.validate(data))
 
     // Add mean-by-segment bar charts with 95% CI for significant results
-    const groupLabelsAll = Array.from(segGroups.keys()).sort((a, b) => String(a).localeCompare(String(b)))
     for (const r of results.filter((r) => r.p < 0.05)) {
       const ci95 = r.groupMeans.map((m, i) => {
         const n = r.groupNs[i] ?? 1
