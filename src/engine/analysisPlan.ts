@@ -42,6 +42,8 @@ export const OUTCOME_KEYWORDS = [
 
 function isSurveyFormat(col: ColumnDefinition): boolean {
   return col.format === 'rating' || col.format === 'matrix'
+    || col.format === 'multi_response' || col.format === 'checkbox'
+    || col.format === 'radio'
 }
 
 function isBehavioralMetric(col: ColumnDefinition): boolean {
