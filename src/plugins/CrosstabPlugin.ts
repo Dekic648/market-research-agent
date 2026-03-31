@@ -250,7 +250,16 @@ const CrosstabPlugin: AnalysisPlugin = {
           ? `${highIndex.length} cell(s) over-indexed (>130). Strongest: "${highIndex[0]?.row}" in "${highIndex[0]?.col}" (index ${highIndex[0]?.index.toFixed(0)}).`
           : `No strong over-indexing detected across ${ct.colLabels.length} segments.`,
         summaryLanguage,
-        detail: JSON.stringify({ grandTotal: ct.grandTotal, nRows: ct.rowLabels.length, nCols: ct.colLabels.length }),
+        detail: JSON.stringify({
+          grandTotal: ct.grandTotal,
+          nRows: ct.rowLabels.length,
+          nCols: ct.colLabels.length,
+          rowLabels: ct.rowLabels,
+          colLabels: ct.colLabels,
+          table: ct.table,
+          rowTotals: ct.rowTotals,
+          colTotals: ct.colTotals,
+        }),
         significant: false,
         pValue: null,
         effectSize: null,
